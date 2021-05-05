@@ -146,7 +146,7 @@ def halo_concentration(mass):
     #return 9.0 * (mass / (M_collapse * h))**(-0.13) / (1.0 + redshift)
     return 9.0 * (mass * h / M_collapse)**(-0.13) / (1.0 + redshift)
 
-# vel must b in km/s
+# vel must be in km/s
 def vel_to_mass(vel):    
     return vel**3 / (10.0 * G * hubble_parameter())
 
