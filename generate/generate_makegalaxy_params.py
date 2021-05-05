@@ -6,9 +6,9 @@ parser = ap.ArgumentParser()
 parser.add_argument('gas_mass_resol')
 args = parser.parse_args()
 
-folder = './makegalaxy'
+folder = './makegalaxy2'
 resol_factor = 5.0  # How much bigger should the DM/Bulge particles be?
-gas_mass_resol = float(args.gas_mass_resol)
+gas_mass_resol = float(args.gas_mass_resol) # particles per mass
 stars_mass_resol = gas_mass_resol
 dm_mass_resol = resol_factor * gas_mass_resol
 bulge_mass_resol = resol_factor * gas_mass_resol
@@ -16,22 +16,23 @@ bulge_mass_resol = resol_factor * gas_mass_resol
 # Conversion from data file units to Msun
 fac = 1.0e10
 
-# Behroozi et al. (2013) ratio of stellar to halo mass
+# Behroozi et al. (2013) ratio of halo mass Mvir to stellar mass M*
 sm_hm_fac = 100.0
 
+# is this even used???
 bulge_to_disk_fac = 1.0 / 3.0
 
 h = 0.7
 G = 4.302e-9 # Mpc (km/s)**2 M_sun**-1
-H0 = 100 # h km Mpc**-1 s**-1
+H0 = 100 # h km Mpc**-1 s**-1    # Hubble's constant v = H0 D
 M_collapse = 8e12 # Msun h**-1
 
-omega_matter = 0.3
+omega_matter = 0.3 # these omegas don't seem to be used
 omega_lambda = 0.7
 #redshift = 4.434
-redshift = 0
+redshift = 0 # why is redshift zero?
 
-total_Ngas = 0
+total_Ngas = 0 # this initialization doesn't seem to be necessary
 total_Ndm = 0
 total_Nstars = 0
 total_Nbulge = 0
@@ -90,11 +91,11 @@ values = ['./',
             '',
             '3.5',                      # Halo Concentration
             '230.0',                    # V200
-            '0.033',                    # Spin parameter
+            '0.033',                    # Spin parameter lambda
             '0.0',                      # Anisotropy radius
             '0.064',                    # Disk mass fraction
             '0.045',                    # Bulge mass fraction
-            '0.000000038',                        # Black hole mass
+            '0.000000038',              # Black hole mass
             '1750000',                  # Num. of halo particles
             '375000',                   # Num. of disk particles
             '875000',                   # Num. of gas particles
@@ -102,14 +103,14 @@ values = ['./',
             '0',                        # 0=pseudorandom, 1=quasirandom
             '0',                        # write density instead of mass
             '0.064',                    # Disk spin fraction
-            '0',                      # Disk scale L, usually set by disk spin
-            '0.1',                   # SD height in units of radial SL
+            '0',                       # Disk scale L, usually set by disk spin
+            '0.1',                      # SD height in units of radial SL
             '1.0',                      # Radial dispersion
             'exponential',              # Stellar population mode
             '13.9',                     # Disk population age (in Gyr)
             '-106.0',                   # Disk population tau (in Gyr)
             '0.7',                      # Gas fraction
-            '2.0',                     # Max disk height
+            '2.0',                      # Max disk height
             '0',                        # Gas distribution type
             '1.0',                      # GD scale length multiplier
             '1.0',                      # Power law gamma
@@ -128,7 +129,7 @@ values = ['./',
             '3.0e8',                    # T_SN effective SN temperature
             '1000',                     # Temperature of cold clouds
             '1.0',                      # q_eos
-            '4.434',                        # redshift
+            '4.434',                    # redshift
             '0.3',                      # omega_matter
             '0.7']                      # omega_lambda
 
@@ -157,10 +158,13 @@ def mass_to_vel(mass):
     return (10.0 * G * hubble_parameter() * mass)**(1.0 / 3.0)
 
 # 1st col Mgas, 2nd col Mdyn
+# load cold gas mass, dynamical mass from file
+# these are estimated/calculated by hand
 data = np.loadtxt('data.txt', skiprows = 1, usecols = (1, 2))
 
 gas_mass = data[:, 0] * fac
 stars_mass = (1.0 / float(values[idx['GasFraction']]) - 1.0) * gas_mass
+# ^- this will need to be updated
 dm_mass = sm_hm_fac * stars_mass
 
 tot_mass = gas_mass + stars_mass + dm_mass
@@ -177,6 +181,7 @@ bh_mass_frac = gas_mass_resol / tot_mass
 bulge_mass = bulge_mass_frac * tot_mass
 disk_mass = disk_mass_frac * tot_mass
 
+# compute number of particles
 Ngas = gas_mass / gas_mass_resol
 Ndm = dm_mass / dm_mass_resol
 Nstars = stars_mass / stars_mass_resol
