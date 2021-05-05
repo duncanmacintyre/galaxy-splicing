@@ -8,7 +8,7 @@ args = parser.parse_args()
 
 folder = './makegalaxy2'
 resol_factor = 5.0  # How much bigger should the DM/Bulge particles be?
-gas_mass_resol = float(args.gas_mass_resol) # particles per mass
+gas_mass_resol = float(args.gas_mass_resol) # mass per particle
 stars_mass_resol = gas_mass_resol
 dm_mass_resol = resol_factor * gas_mass_resol
 bulge_mass_resol = resol_factor * gas_mass_resol
@@ -147,6 +147,7 @@ def halo_concentration(mass):
     #return 9.0 * (mass / (M_collapse * h))**(-0.13) / (1.0 + redshift)
     return 9.0 * (mass * h / M_collapse)**(-0.13) / (1.0 + redshift)
 
+# this function not used
 # vel must be in km/s
 def vel_to_mass(vel):    
     return vel**3 / (10.0 * G * hubble_parameter())
