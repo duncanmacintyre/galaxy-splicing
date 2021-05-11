@@ -2,13 +2,14 @@ import numpy as np
 import argparse as ap
 import itertools
 
-parser = ap.ArgumentParser()
-parser.add_argument('gas_mass_resol')
-args = parser.parse_args()
+# parser = ap.ArgumentParser()
+# parser.add_argument('gas_mass_resol')
+# args = parser.parse_args()
 
 folder = './makegalaxy2'
 resol_factor = 5.0  # How much bigger should the DM/Bulge particles be?
-gas_mass_resol = float(args.gas_mass_resol) # mass per particle
+gas_mass_resol = 1.e6
+# gas_mass_resol = float(args.gas_mass_resol) # mass per particle
 stars_mass_resol = gas_mass_resol
 dm_mass_resol = resol_factor * gas_mass_resol
 bulge_mass_resol = resol_factor * gas_mass_resol
