@@ -28,7 +28,7 @@ G = 4.302e-9 # Mpc (km/s)**2 M_sun**-1
 H0 = 100 # h km Mpc**-1 s**-1    # Hubble's constant v = H0 D
 M_collapse = 8e12 # Msun h**-1
 
-omega_matter = 0.3 # these omegas don't seem to be used
+omega_matter = 0.3
 omega_lambda = 0.7
 #redshift = 4.434
 redshift = 0 # why is redshift zero?
@@ -108,7 +108,7 @@ values = ['./',
             '0.1',                      # SD height in units of radial SL
             '1.0',                      # Radial dispersion
             'exponential',              # Stellar population mode
-            '13.9',                     # Disk population age (in Gyr)
+            '13.9',                     # Disk population age (in Gyr) - doesn't matter, age has no effect
             '-106.0',                   # Disk population tau (in Gyr)
             '0.7',                      # Gas fraction
             '2.0',                      # Max disk height
