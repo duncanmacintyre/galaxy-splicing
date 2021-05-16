@@ -1,40 +1,152 @@
 # DR 2020: intial code for 2020 paper
-# DM 2021: modified to include more galaxies, new Msun data
+# DM 2021: reorganized code; included more galaxies, new Mstars data
+#
+# The file defines the function generate_makegalaxy_params(). This function
+# generates parameter files to use as input to makegalaxy based on galaxy
+# gas masses, stellar masses, and halo virial masses.
+#
+# I recommend importing generate_makegalaxy_params into a script and running
+# it from there. That way you keep track of all the options that you used.
+# See for example gen_files.py.
+#
+# The python script 'test_generate_makegalaxy_params.py' can be run to test
+# that the function is working.
+#
 
-# this file stores the main function
-# the python script 'gen_files.py' should be used to run this
-# the python script 'test_generate_makegalaxy_params.py' can be run to test that the function is working
+import numpy as np
+import pandas
+import itertools
+
+### CONFIGUATION OPTIONS ###
+
+# conversion from data file units to mass of sun
+fac = 1.0e10
+
+# How much bigger should the DM/Bulge particles be than gas/stars?
+resol_factor = 5.0
+
+h = 0.7
+G = 4.302e-9 # Mpc (km/s)**2 M_sun**-1
+H0 = 100 # h km Mpc**-1 s**-1    # Hubble's constant v = H0 D
+M_collapse = 8e12 # Msun h**-1
+
+keys = ['OutputDir',
+        'OutputFile',
+        'CC',
+        'V200',
+        'LAMBDA',
+        'AnisotropyRadius',
+        'MD',
+        'MB',
+        'MBH',
+        'N_HALO',
+        'N_DISK',
+        'N_GAS',
+        'N_BULGE',
+        'UseQrng',
+        'WriteDensity',
+        'JD',
+        'H',
+        'DiskHeight',
+        'RadialDispersionFactor',
+        'DiskPopMode',
+        'DiskPopAge',
+        'DiskPopTau',
+        'GasFraction',
+        'MaxGasDiskHeight',
+        'GasDistribution',
+        'GasExpAlpha',
+        'PowerLawGamma',
+        'PowerLawCutoff',
+        'Zmet0',
+        'ZmetGrad',
+        'GravSoftening',
+        'ErrTolTheta',
+        'BulgeSize',
+        'BulgePopMode',
+        'BulgePopAge',
+        'BulgePopTau',
+        'MaxSfrTimescale',
+        'FactorSN',
+        'FactorEVP',
+        'TempSupernova',
+        'TempClouds',
+        'FactorForSofterEQS',
+        'REDSHIFT',
+        'Omega_m0',
+        'Omega_L0']
+
+# default values for the galaxy, some will be overwritten
+values = ['./',
+            '',
+            '3.5',                      # Halo Concentration
+            '230.0',                    # V200
+            '0.033',                    # Spin parameter lambda
+            '0.0',                      # Anisotropy radius
+            '0.064',                    # Disk mass fraction
+            '0.045',                    # Bulge mass fraction
+            '0.000000038',              # Black hole mass
+            '1750000',                  # Num. of halo particles
+            '375000',                   # Num. of disk particles
+            '875000',                   # Num. of gas particles
+            '875000',                   # Num. of bulge particles
+            '0',                        # 0=pseudorandom, 1=quasirandom
+            '0',                        # write density instead of mass
+            '0.064',                    # Disk spin fraction
+            '0',                       # Disk scale L, usually set by disk spin
+            '0.1',                      # SD height in units of radial SL
+            '1.0',                      # Radial dispersion
+            'exponential',              # Stellar population mode
+            '13.9',                     # Disk population age (in Gyr) - doesn't matter, age has no effect
+            '-106.0',                   # Disk population tau (in Gyr)
+            '0.7',                      # Gas fraction
+            '2.0',                      # Max disk height
+            '0',                        # Gas distribution type
+            '1.0',                      # GD scale length multiplier
+            '1.0',                      # Power law gamma
+            '1.0',                      # Max. radius of gas for PLD
+            '0.032',                    # Gas metallicity in solar (central)
+            '-0.03',                    # Gas metallicity gradient (dex/kpc)
+            '0.06',                     # Grav. softening
+            '0.15',                     # Tree opening criterion
+            '0.75',                     # Bulge SL in units of disk SL
+            'instantaneous',            # Stellar population mode (bulge)
+            '13.9',                     # Bulge population age (in Gyr)
+            '1.0',                      # Bulge population tau (in Gyr)
+            '4.5',                      # Maxsfrtimescale
+            '0.1',                      # Beta, mass fraction of massive stars
+            '3000',                     # A_0 for SH+03 model
+            '3.0e8',                    # T_SN effective SN temperature
+            '1000',                     # Temperature of cold clouds
+            '1.0',                      # q_eos
+            '4.303',                    # redshift
+            '0.3089',                   # omega_matter
+            '0.6911']                   # omega_lambda
+
+# build mapping for keys and values
+idx = {}
+for i, key in enumerate(keys):
+    idx.update({key: i})
+
+
+### MAIN FUNCTION TO GENERATE PARAMTER FILES ###
 
 # generate parameter files for makegalaxy
 #       gas_mass_resol is the mass per gas particle (units: mass of the sun)
 #       output_folder is the path in which to save the parameter files
 #       mass_file is the path to a CSV file with columns label, Mgas, M*, Mvir
-def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str):
-
-    import numpy as np
-    import pandas
-    import itertools
+# You can pass additional keyword arguments. These will become new default values for
+# makegalaxy parameters. e.g. pass REDSHIFT=2 to use redshift 2.
+def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str, **kwargs):
 
     # mass per particle of each kind
-    resol_factor = 5.0  # How much bigger should the DM/Bulge particles be?
     stars_mass_resol = gas_mass_resol
     dm_mass_resol = resol_factor * gas_mass_resol
     bulge_mass_resol = resol_factor * gas_mass_resol
 
-    # conversion from data file units to mass of sun
-    fac = 1.0e10
-
-    h = 0.7
-    G = 4.302e-9 # Mpc (km/s)**2 M_sun**-1
-    H0 = 100 # h km Mpc**-1 s**-1    # Hubble's constant v = H0 D
-    M_collapse = 8e12 # Msun h**-1
-
-    omega_matter = 0.3
-    omega_lambda = 0.7
-    # redshift = 4.434
-    redshift = 0
-
-    # load the gas, stellar, and halo masses
+    # load the gas, stellar, and halo masses from a CSV file
+    # the CSV must use commas for delimeters and have at least these columns:
+    #   label, Mgas, M*, Mvir
     masses = pandas.read_csv(mass_file) # type: pandas.DataFrame
     # masses['label'] has the labels C1, C2, C3, ... as strings
     # masses['Mgas'] has the gas masses
@@ -43,125 +155,7 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
 
     # this iterator continuously cycles over the galaxy labels
     labels = itertools.cycle(masses['label'])
-
-    keys = ['OutputDir',
-            'OutputFile',
-            'CC',
-            'V200',
-            'LAMBDA',
-            'AnisotropyRadius',
-            'MD',
-            'MB',
-            'MBH',
-            'N_HALO',
-            'N_DISK',
-            'N_GAS',
-            'N_BULGE',
-            'UseQrng',
-            'WriteDensity',
-            'JD',
-            'H',
-            'DiskHeight',
-            'RadialDispersionFactor',
-            'DiskPopMode',
-            'DiskPopAge',
-            'DiskPopTau',
-            'GasFraction',
-            'MaxGasDiskHeight',
-            'GasDistribution',
-            'GasExpAlpha',
-            'PowerLawGamma',
-            'PowerLawCutoff',
-            'Zmet0',
-            'ZmetGrad',
-            'GravSoftening',
-            'ErrTolTheta',
-            'BulgeSize',
-            'BulgePopMode',
-            'BulgePopAge',
-            'BulgePopTau',
-            'MaxSfrTimescale',
-            'FactorSN',
-            'FactorEVP',
-            'TempSupernova',
-            'TempClouds',
-            'FactorForSofterEQS',
-            'REDSHIFT',
-            'Omega_m0',
-            'Omega_L0']
-
-    # Default values for the galaxy, some will be overwritten
-    values = ['./',
-                '',
-                '3.5',                      # Halo Concentration
-                '230.0',                    # V200
-                '0.033',                    # Spin parameter lambda
-                '0.0',                      # Anisotropy radius
-                '0.064',                    # Disk mass fraction
-                '0.045',                    # Bulge mass fraction
-                '0.000000038',              # Black hole mass
-                '1750000',                  # Num. of halo particles
-                '375000',                   # Num. of disk particles
-                '875000',                   # Num. of gas particles
-                '875000',                   # Num. of bulge particles
-                '0',                        # 0=pseudorandom, 1=quasirandom
-                '0',                        # write density instead of mass
-                '0.064',                    # Disk spin fraction
-                '0',                       # Disk scale L, usually set by disk spin
-                '0.1',                      # SD height in units of radial SL
-                '1.0',                      # Radial dispersion
-                'exponential',              # Stellar population mode
-                '13.9',                     # Disk population age (in Gyr) - doesn't matter, age has no effect
-                '-106.0',                   # Disk population tau (in Gyr)
-                '0.7',                      # Gas fraction
-                '2.0',                      # Max disk height
-                '0',                        # Gas distribution type
-                '1.0',                      # GD scale length multiplier
-                '1.0',                      # Power law gamma
-                '1.0',                      # Max. radius of gas for PLD
-                '0.032',                    # Gas metallicity in solar (central)
-                '-0.03',                    # Gas metallicity gradient (dex/kpc)
-                '0.06',                     # Grav. softening
-                '0.15',                     # Tree opening criterion
-                '0.75',                     # Bulge SL in units of disk SL
-                'instantaneous',            # Stellar population mode (bulge)
-                '13.9',                     # Bulge population age (in Gyr)
-                '1.0',                      # Bulge population tau (in Gyr)
-                '4.5',                      # Maxsfrtimescale
-                '0.1',                      # Beta, mass fraction of massive stars
-                '3000',                     # A_0 for SH+03 model
-                '3.0e8',                    # T_SN effective SN temperature
-                '1000',                     # Temperature of cold clouds
-                '1.0',                      # q_eos
-                str(redshift),                   # redshift
-                '0.3',                      # omega_matter
-                '0.7']                      # omega_lambda
-
-    # Build mapping
-    idx = {}
-    for i, key in enumerate(keys):
-        idx.update({key: i})
         
-    def hubble_parameter():
-        return H0 * h * np.sqrt(omega_matter * (1.0 + redshift)**3  + omega_lambda)
-
-    # calculate the concentration expected at a redshift
-    # from Roberston+06
-    def halo_concentration(mass):
-        #return 9.0 * (mass / (M_collapse * h))**(-0.13) / (1.0 + redshift)
-        return 9.0 * (mass * h / M_collapse)**(-0.13) / (1.0 + redshift)
-
-    # -- this function not used --
-    # vel must be in km/s
-    # def vel_to_mass(vel):    
-    #     return vel**3 / (10.0 * G * hubble_parameter())
-
-    # Mass must be in Msun
-    def mass_to_vel(mass):
-        # (mass / h) to follow Springel+05 Section 2.4
-        #return (10.0 * G * hubble_parameter() * (mass / h))**(1.0 / 3.0)
-        return (10.0 * G * hubble_parameter() * mass)**(1.0 / 3.0)
-
     # these masses in units of the mass of the sun
     gas_mass = masses['Mgas'] * fac
     stars_mass = masses['M*'] * fac
@@ -194,6 +188,10 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
 
         tmp_values = values
         tmp_label = next(labels)
+
+        # overwrite any values passed
+        for key_given, value_given in kwargs.items():
+            tmp_values[idx[key_given]] = str(value_given)
         
         tmp_values[idx['OutputFile']] = tmp_label + '.hdf5'
         
@@ -228,4 +226,26 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     print('TotNstars: %g' % total_Nstars)
     print('TotNbulge: %g' % total_Nbulge)
     print('TotPart: %g' % total_part)
+
+
+
+### HELPER FUNCTIONS TO COMPUTE QUANTITIES ###
+# we compute all quantities as if the galaxies are at redshift 0
+# makegalaxy will then convert quantities to be correct for our non-zero redshift
+#
+# note:
+#       we want to compile makegalaxy with the REDSHIFT_SCALING option set
+#       and the V_SCALING option unset in "config.h"
+#       (this is the default at time of writing)
+
+# calculate the halo concentration (from Roberston+06)
+def halo_concentration(mass):
+    return 9.0 * (mass * h / M_collapse)**(-0.13)
+
+# calculate the virial velocity V200
+# mass must be in Msun
+def mass_to_vel(mass):
+    # (mass / h) to follow Springel+05 Section 2.4
+    return (10.0 * G * h * H0 * mass)**(1.0 / 3.0)
+
 
