@@ -40,6 +40,6 @@ FactorEVP				3000
 TempSupernova				3.0e8
 TempClouds				1000
 FactorForSofterEQS				1.0
-REDSHIFT				0
+REDSHIFT				4.434
 Omega_m0				0.3
 Omega_L0				0.7
