@@ -136,13 +136,15 @@ for i, key in enumerate(keys):
 #       output_folder is the path in which to save the parameter files
 #       mass_file is the path to a CSV file with columns label, Mgas, M*, Mvir
 # You can pass additional keyword arguments. These will become new default values for
-# makegalaxy parameters. e.g. pass REDSHIFT=2 to use redshift 2.
+# makegalaxy parameters. e.g. pass REDSHIFT=2 to set the redshift parameter to 2.
 def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str, **kwargs):
 
     # mass per particle of each kind
     stars_mass_resol = gas_mass_resol
     dm_mass_resol = resol_factor * gas_mass_resol
     bulge_mass_resol = resol_factor * gas_mass_resol
+
+    # --- load galaxy masses from file ---
 
     # load the gas, stellar, and halo masses from a CSV file
     # the CSV must use commas for delimeters and have at least these columns:
@@ -153,20 +155,31 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     # masses['M*'] has the stellar masses
     # masses['Mvir'] has the virulent masses of the dark matter halos
 
+    # which galaxies in masses we will generate parameter files for
+    # keep only galaxies where Mgas, M*, and Mvir are not NaN
+    # this ignores any galaxies for which we did not compute mass
+    keep = masses['Mgas'].notna() & masses['M*'].notna() & masses['Mvir'].notna()
+
+    # number of parameter files that will be generated (one for each galaxy)
+    M = keep.sum()
+
     # this iterator continuously cycles over the galaxy labels
-    labels = itertools.cycle(masses['label'])
-        
+    labels = itertools.cycle(masses.loc[keep, 'label'])
+    
     # these masses in units of the mass of the sun
-    gas_mass = masses['Mgas'] * fac
-    stars_mass = masses['M*'] * fac
-    dm_mass = masses['Mvir'] * fac
+    gas_mass = masses.loc[keep, 'Mgas'].to_numpy() * fac
+    stars_mass = masses.loc[keep, 'M*'].to_numpy() * fac
+    dm_mass = masses.loc[keep, 'Mvir'].to_numpy() * fac
+
+    # --- compute derived quantities ---
+
     tot_mass = gas_mass + stars_mass + dm_mass
 
     concentrations = halo_concentration(tot_mass)
     circ_vels = mass_to_vel(tot_mass)
 
     disk_mass = gas_mass + stars_mass 
-    bulge_mass = np.zeros(len(masses)) # assume the bulge could not have formed in 1.4Gyr without many mergers
+    bulge_mass = np.zeros(M) # assume the bulge could not have formed in 1.4Gyr without many mergers
     disk_mass_frac = disk_mass / tot_mass
     bulge_mass_frac = bulge_mass / tot_mass
 
@@ -178,8 +191,10 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     Nstars = stars_mass / stars_mass_resol
     Nbulge = bulge_mass / bulge_mass_resol
 
+    # --- write the parameter files ---
+
     # loop through each row from the data and make the new parameters
-    for i in range(0, len(masses)):
+    for i in range(0, M):
         # print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
         # print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
         # print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
@@ -212,7 +227,8 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
         with open(output_folder + '/' + tmp_label + '.txt', 'w') as f:
             for key in keys:
                 f.write(key + '\t\t\t\t' + tmp_values[idx[key]] + '\n')
-        
+    
+    # --- compute total number of particles in all galaxies, print this ---
 
     total_Ngas = np.sum(Ngas)
     total_Ndm = np.sum(Ndm)
