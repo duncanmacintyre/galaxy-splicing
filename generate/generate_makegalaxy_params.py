@@ -135,9 +135,10 @@ for i, key in enumerate(keys):
 #       gas_mass_resol is the mass per gas particle (units: mass of the sun)
 #       output_folder is the path in which to save the parameter files
 #       mass_file is the path to a CSV file with columns label, Mgas, M*, Mvir
+#       write is whether to actually write any files (default True, of course)
 # You can pass additional keyword arguments. These will become new default values for
 # makegalaxy parameters. e.g. pass REDSHIFT=2 to set the redshift parameter to 2.
-def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str, **kwargs):
+def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str, write: bool = True, **kwargs):
 
     # mass per particle of each kind
     stars_mass_resol = gas_mass_resol
@@ -193,42 +194,45 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
 
     # --- write the parameter files ---
 
-    # loop through each row from the data and make the new parameters
-    for i in range(0, M):
-        # print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
-        # print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
-        # print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
-        # print('DM mass, #: %g, %d' % (dm_mass[i], Ndm[i]))
-        # print()
+    if write:
+        # loop through each row from the data and make the new parameters
+        for i in range(0, M):
+            # print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
+            # print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
+            # print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
+            # print('DM mass, #: %g, %d' % (dm_mass[i], Ndm[i]))
+            # print()
 
-        tmp_values = values
-        tmp_label = next(labels)
+            tmp_values = values
+            tmp_label = next(labels)
 
-        # overwrite any values passed
-        for key_given, value_given in kwargs.items():
-            tmp_values[idx[key_given]] = str(value_given)
-        
-        tmp_values[idx['OutputFile']] = tmp_label + '.hdf5'
-        
-        tmp_values[idx['CC']] = str(concentrations[i])
-        tmp_values[idx['V200']] = str(circ_vels[i])
-        
-        tmp_values[idx['MB']] = str(float(bulge_mass_frac[i]))
-        tmp_values[idx['MD']] = str(float(disk_mass_frac[i]))
-        tmp_values[idx['JD']] = str(float(disk_mass_frac[i]))
+            # overwrite any values passed
+            for key_given, value_given in kwargs.items():
+                tmp_values[idx[key_given]] = str(value_given)
+            
+            tmp_values[idx['OutputFile']] = tmp_label + '.hdf5'
+            
+            tmp_values[idx['CC']] = str(concentrations[i])
+            tmp_values[idx['V200']] = str(circ_vels[i])
+            
+            tmp_values[idx['MB']] = str(float(bulge_mass_frac[i]))
+            tmp_values[idx['MD']] = str(float(disk_mass_frac[i]))
+            tmp_values[idx['JD']] = str(float(disk_mass_frac[i]))
 
-        tmp_values[idx['N_HALO']] = str(int(Ndm[i]))
-        tmp_values[idx['N_DISK']] = str(int(Nstars[i]))
-        tmp_values[idx['N_GAS']] = str(int(Ngas[i]))
-        tmp_values[idx['N_BULGE']] = str(int(Nbulge[i]))
-       
-        tmp_values[idx['MBH']] = str(float(bh_mass_frac[i]))
+            tmp_values[idx['N_HALO']] = str(int(Ndm[i]))
+            tmp_values[idx['N_DISK']] = str(int(Nstars[i]))
+            tmp_values[idx['N_GAS']] = str(int(Ngas[i]))
+            tmp_values[idx['N_BULGE']] = str(int(Nbulge[i]))
+           
+            tmp_values[idx['MBH']] = str(float(bh_mass_frac[i]))
 
-        with open(output_folder + '/' + tmp_label + '.txt', 'w') as f:
-            for key in keys:
-                f.write(key + '\t\t\t\t' + tmp_values[idx[key]] + '\n')
+            with open(output_folder + '/' + tmp_label + '.txt', 'w') as f:
+                for key in keys:
+                    f.write(key + '\t\t\t\t' + tmp_values[idx[key]] + '\n')
     
     # --- compute total number of particles in all galaxies, print this ---
+
+    total_mass = np.sum(tot_mass)
 
     total_Ngas = np.sum(Ngas)
     total_Ndm = np.sum(Ndm)
@@ -237,12 +241,14 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
 
     total_part = total_Ngas + total_Ndm + total_Nstars + total_Nbulge
 
+    print('{} galaxies of total mass {:.3e}'.format(M, total_mass))
     print('TotNgas: %g' % total_Ngas)
     print('TotNdm: %g' % total_Ndm)
     print('TotNstars: %g' % total_Nstars)
     print('TotNbulge: %g' % total_Nbulge)
     print('TotPart: %g' % total_part)
 
+    return(total_mass, total_part, total_Ngas, total_Ndm, total_Nstars, total_Nbulge)
 
 
 ### HELPER FUNCTIONS TO COMPUTE QUANTITIES ###
