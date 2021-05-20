@@ -4,6 +4,7 @@ import re
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 import matplotlib.pyplot as plt
+from whereswitch import whereswitch
 
 # load the data
 df = pandas.read_csv('galaxy_masses.csv')
@@ -11,7 +12,7 @@ df = pandas.read_csv('galaxy_masses.csv')
 # angular size distance to protocluster in kpc
 # http://www.astro.ucla.edu/%7Ewright/CosmoCalc.html
 # D_A = 1419.1*1e3
-D_A = 1421.3*1e3 # H0=67.8, Ωm = 0.309, ΩΛ = 0.691
+# D_A = 1421.3*1e3 # H0=67.8, Ωm = 0.309, ΩΛ = 0.691
 
 # conversion factor from arcsec to kpc
 ratio_kpc_arcsec = 7.
@@ -37,8 +38,7 @@ def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra
 
     # use SkyCoord class to parse the strings with ra and dec
     c = SkyCoord(ra=df['RA'], dec=df['DEC'],
-                 unit=(u.hourangle, u.deg),
-                 distance=D_A*u.kpc)
+                 unit=(u.hourangle, u.deg))
 
     # compute total masses of galaxies
     M = df['Mgas'] + df['M*'] + df['Mvir']
@@ -110,9 +110,42 @@ def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra
     lim = ax.get_xlim()
     ax.set_xlim(lim[1], lim[0])
 
-    
+    # distance from centre of mass
+    # r = np.sqrt(x**2 + y**2)
+    # fig2, [ax2a, ax2b] = plt.subplots(2, constrained_layout=True)
+    # ax2a.scatter(r[df['Mgas_method'] == 'CO43'],
+    #              M[df['Mgas_method'] == 'CO43'],
+    #              label='CO43',
+    #              marker = 'o')
+    # ax2a.scatter(r[df['Mgas_method'] == 'Cii'],
+    #              M[df['Mgas_method'] == 'Cii'],
+    #              label='Cii',
+    #              marker = '*')
+    # ax2a.scatter(r[df['Mgas_method'] == 'SFR'],
+    #              M[df['Mgas_method'] == 'SFR'],
+    #              label='SFR',
+    #              marker = '+')
+    # ax2b.scatter(r[df['Mgas_method'] == 'CO43'],
+    #              df['v'][df['Mgas_method'] == 'CO43'],
+    #              label='CO43',
+    #              marker = 'o')
+    # ax2b.scatter(r[df['Mgas_method'] == 'Cii'],
+    #              df['v'][df['Mgas_method'] == 'Cii'],
+    #              label='Cii',
+    #              marker = '*')
+    # ax2b.scatter(r[df['Mgas_method'] == 'SFR'],
+    #              df['v'][df['Mgas_method'] == 'SFR'],
+    #              label='SFR',
+    #              marker = '+')
+    # ax2a.set_xlabel('Distance from centre [kpc]')
+    # ax2b.set_xlabel('Distance from centre [kpc]')
+    # ax2a.set_ylabel('Mass [1e10 M☉]')
+    # ax2b.set_ylabel('Radial velocity [km/s]')
+    # ax2a.legend()
+    # ax2b.legend()
 
 
-plotposweights(df, circles=(90, 210))
-# plotposweights(df.loc[k,:])
+
+plotposweights(df, circles=(90, 95), centre_radius=95)
+
 plt.show()
