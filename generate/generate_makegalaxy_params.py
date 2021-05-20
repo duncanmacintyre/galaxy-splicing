@@ -93,7 +93,7 @@ values = ['./',
             '0',                        # 0=pseudorandom, 1=quasirandom
             '0',                        # write density instead of mass
             '0.064',                    # Disk spin fraction
-            '0',                       # Disk scale L, usually set by disk spin
+            '0',                        # Disk scale L, usually set by disk spin
             '0.1',                      # SD height in units of radial SL
             '1.0',                      # Radial dispersion
             'exponential',              # Stellar population mode
