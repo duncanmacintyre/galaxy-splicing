@@ -1,43 +1,34 @@
+# DR 2020: intial code for 2020 paper
+# DM 2021: reorganized code; included more galaxies, new Mstars data
+#
+# The file defines the function generate_makegalaxy_params(). This function
+# generates parameter files to use as input to makegalaxy based on galaxy
+# gas masses, stellar masses, and halo virial masses.
+#
+# I recommend importing generate_makegalaxy_params into a script and running
+# it from there. That way you keep track of all the options that you used.
+# See for example gen_files.py.
+#
+# The python script 'test_generate_makegalaxy_params.py' can be run to test
+# that the function is working.
+#
+
 import numpy as np
-import argparse as ap
+import pandas
 import itertools
 
-parser = ap.ArgumentParser()
-parser.add_argument('gas_mass_resol')
-args = parser.parse_args()
+### CONFIGUATION OPTIONS ###
 
-folder = './makegalaxy'
-resol_factor = 5.0  # How much bigger should the DM/Bulge particles be?
-gas_mass_resol = float(args.gas_mass_resol)
-stars_mass_resol = gas_mass_resol
-dm_mass_resol = resol_factor * gas_mass_resol
-bulge_mass_resol = resol_factor * gas_mass_resol
-
-# Conversion from data file units to Msun
+# conversion from data file units to mass of sun
 fac = 1.0e10
 
-# Behroozi et al. (2013) ratio of stellar to halo mass
-sm_hm_fac = 100.0
-
-bulge_to_disk_fac = 1.0 / 3.0
+# How much bigger should the DM/Bulge particles be than gas/stars?
+resol_factor = 5.0
 
 h = 0.7
 G = 4.302e-9 # Mpc (km/s)**2 M_sun**-1
-H0 = 100 # h km Mpc**-1 s**-1
+H0 = 100 # h km Mpc**-1 s**-1    # Hubble's constant v = H0 D
 M_collapse = 8e12 # Msun h**-1
-
-omega_matter = 0.3
-omega_lambda = 0.7
-#redshift = 4.434
-redshift = 0
-
-total_Ngas = 0
-total_Ndm = 0
-total_Nstars = 0
-total_Nbulge = 0
-
-labels = itertools.cycle(('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-                            'K', 'L', 'M', 'N'))
 
 keys = ['OutputDir',
         'OutputFile',
@@ -85,16 +76,16 @@ keys = ['OutputDir',
         'Omega_m0',
         'Omega_L0']
 
-# Default values for the galaxy, some will be overwritten
+# default values for the galaxy, some will be overwritten
 values = ['./',
             '',
             '3.5',                      # Halo Concentration
             '230.0',                    # V200
-            '0.033',                    # Spin parameter
+            '0.033',                    # Spin parameter lambda
             '0.0',                      # Anisotropy radius
             '0.064',                    # Disk mass fraction
             '0.045',                    # Bulge mass fraction
-            '0.000000038',                        # Black hole mass
+            '0.000000038',              # Black hole mass
             '1750000',                  # Num. of halo particles
             '375000',                   # Num. of disk particles
             '875000',                   # Num. of gas particles
@@ -102,14 +93,14 @@ values = ['./',
             '0',                        # 0=pseudorandom, 1=quasirandom
             '0',                        # write density instead of mass
             '0.064',                    # Disk spin fraction
-            '0',                      # Disk scale L, usually set by disk spin
-            '0.1',                   # SD height in units of radial SL
+            '0',                        # Disk scale L, usually set by disk spin
+            '0.1',                      # SD height in units of radial SL
             '1.0',                      # Radial dispersion
             'exponential',              # Stellar population mode
-            '13.9',                     # Disk population age (in Gyr)
+            '13.9',                     # Disk population age (in Gyr) - doesn't matter, age has no effect
             '-106.0',                   # Disk population tau (in Gyr)
             '0.7',                      # Gas fraction
-            '2.0',                     # Max disk height
+            '2.0',                      # Max disk height
             '0',                        # Gas distribution type
             '1.0',                      # GD scale length multiplier
             '1.0',                      # Power law gamma
@@ -128,101 +119,155 @@ values = ['./',
             '3.0e8',                    # T_SN effective SN temperature
             '1000',                     # Temperature of cold clouds
             '1.0',                      # q_eos
-            '4.434',                        # redshift
-            '0.3',                      # omega_matter
-            '0.7']                      # omega_lambda
+            '4.303',                    # redshift
+            '0.3089',                   # omega_matter
+            '0.6911']                   # omega_lambda
 
-# Build mapping
+# build mapping for keys and values
 idx = {}
 for i, key in enumerate(keys):
     idx.update({key: i})
+
+
+### MAIN FUNCTION TO GENERATE PARAMTER FILES ###
+
+# generate parameter files for makegalaxy
+#       gas_mass_resol is the mass per gas particle (units: mass of the sun)
+#       output_folder is the path in which to save the parameter files
+#       mass_file is the path to a CSV file with columns label, Mgas, M*, Mvir
+#       write is whether to actually write any files (default True, of course)
+# You can pass additional keyword arguments. These will become new default values for
+# makegalaxy parameters. e.g. pass REDSHIFT=2 to set the redshift parameter to 2.
+def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str, write: bool = True, **kwargs):
+
+    # mass per particle of each kind
+    stars_mass_resol = gas_mass_resol
+    dm_mass_resol = resol_factor * gas_mass_resol
+    bulge_mass_resol = resol_factor * gas_mass_resol
+
+    # --- load galaxy masses from file ---
+
+    # load the gas, stellar, and halo masses from a CSV file
+    # the CSV must use commas for delimeters and have at least these columns:
+    #   label, Mgas, M*, Mvir
+    masses = pandas.read_csv(mass_file) # type: pandas.DataFrame
+    # masses['label'] has the labels C1, C2, C3, ... as strings
+    # masses['Mgas'] has the gas masses
+    # masses['M*'] has the stellar masses
+    # masses['Mvir'] has the virulent masses of the dark matter halos
+
+    # which galaxies in masses we will generate parameter files for
+    # keep only galaxies where Mgas, M*, and Mvir are not NaN
+    # this ignores any galaxies for which we did not compute mass
+    keep = masses['Mgas'].notna() & masses['M*'].notna() & masses['Mvir'].notna()
+
+    # number of parameter files that will be generated (one for each galaxy)
+    M = keep.sum()
+
+    # this iterator continuously cycles over the galaxy labels
+    labels = itertools.cycle(masses.loc[keep, 'label'])
     
-def hubble_parameter():
-    return H0 * h * np.sqrt(omega_matter * (1.0 + redshift)**3  + omega_lambda)
+    # these masses in units of the mass of the sun
+    gas_mass = masses.loc[keep, 'Mgas'].to_numpy() * fac
+    stars_mass = masses.loc[keep, 'M*'].to_numpy() * fac
+    dm_mass = masses.loc[keep, 'Mvir'].to_numpy() * fac
 
-# Calculate the concentration expected at a redshift
-# From Roberston+06
+    # --- compute derived quantities ---
+
+    tot_mass = gas_mass + stars_mass + dm_mass
+
+    concentrations = halo_concentration(tot_mass)
+    circ_vels = mass_to_vel(tot_mass)
+
+    disk_mass = gas_mass + stars_mass 
+    bulge_mass = np.zeros(M) # assume the bulge could not have formed in 1.4Gyr without many mergers
+    disk_mass_frac = disk_mass / tot_mass
+    bulge_mass_frac = bulge_mass / tot_mass
+
+    bh_mass_frac = gas_mass_resol / tot_mass # black hole mass is same as mass of one gas particle
+
+    # compute number of particles
+    Ngas = gas_mass / gas_mass_resol
+    Ndm = dm_mass / dm_mass_resol
+    Nstars = stars_mass / stars_mass_resol
+    Nbulge = bulge_mass / bulge_mass_resol
+
+    # --- write the parameter files ---
+
+    if write:
+        # loop through each row from the data and make the new parameters
+        for i in range(0, M):
+            # print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
+            # print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
+            # print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
+            # print('DM mass, #: %g, %d' % (dm_mass[i], Ndm[i]))
+            # print()
+
+            tmp_values = values
+            tmp_label = next(labels)
+
+            # overwrite any values passed
+            for key_given, value_given in kwargs.items():
+                tmp_values[idx[key_given]] = str(value_given)
+            
+            tmp_values[idx['OutputFile']] = tmp_label + '.hdf5'
+            
+            tmp_values[idx['CC']] = str(concentrations[i])
+            tmp_values[idx['V200']] = str(circ_vels[i])
+            
+            tmp_values[idx['MB']] = str(float(bulge_mass_frac[i]))
+            tmp_values[idx['MD']] = str(float(disk_mass_frac[i]))
+            tmp_values[idx['JD']] = str(float(disk_mass_frac[i]))
+
+            tmp_values[idx['N_HALO']] = str(int(Ndm[i]))
+            tmp_values[idx['N_DISK']] = str(int(Nstars[i]))
+            tmp_values[idx['N_GAS']] = str(int(Ngas[i]))
+            tmp_values[idx['N_BULGE']] = str(int(Nbulge[i]))
+           
+            tmp_values[idx['MBH']] = str(float(bh_mass_frac[i]))
+
+            with open(output_folder + '/' + tmp_label + '.txt', 'w') as f:
+                for key in keys:
+                    f.write(key + '\t\t\t\t' + tmp_values[idx[key]] + '\n')
+    
+    # --- compute total number of particles in all galaxies, print this ---
+
+    total_mass = np.sum(tot_mass)
+
+    total_Ngas = np.sum(Ngas)
+    total_Ndm = np.sum(Ndm)
+    total_Nstars = np.sum(Nstars)
+    total_Nbulge = np.sum(Nbulge)
+
+    total_part = total_Ngas + total_Ndm + total_Nstars + total_Nbulge
+
+    print('{} galaxies of total mass {:.3e}'.format(M, total_mass))
+    print('TotNgas: %g' % total_Ngas)
+    print('TotNdm: %g' % total_Ndm)
+    print('TotNstars: %g' % total_Nstars)
+    print('TotNbulge: %g' % total_Nbulge)
+    print('TotPart: %g' % total_part)
+
+    return(total_mass, total_part, total_Ngas, total_Ndm, total_Nstars, total_Nbulge)
+
+
+### HELPER FUNCTIONS TO COMPUTE QUANTITIES ###
+# we compute all quantities as if the galaxies are at redshift 0
+# makegalaxy will then convert quantities to be correct for our non-zero redshift
+#
+# note:
+#       we want to compile makegalaxy with the REDSHIFT_SCALING option set
+#       and the V_SCALING option unset in "config.h"
+#       (this is the default at time of writing)
+
+# calculate the halo concentration (from Roberston+06)
 def halo_concentration(mass):
-    #return 9.0 * (mass / (M_collapse * h))**(-0.13) / (1.0 + redshift)
-    return 9.0 * (mass * h / M_collapse)**(-0.13) / (1.0 + redshift)
+    return 9.0 * (mass * h / M_collapse)**(-0.13)
 
-# vel must be in km/s
-def vel_to_mass(vel):    
-    return vel**3 / (10.0 * G * hubble_parameter())
-
-# Mass must be in Msun
+# calculate the virial velocity V200
+# mass must be in Msun
 def mass_to_vel(mass):
     # (mass / h) to follow Springel+05 Section 2.4
-    #return (10.0 * G * hubble_parameter() * (mass / h))**(1.0 / 3.0)
-    return (10.0 * G * hubble_parameter() * mass)**(1.0 / 3.0)
+    return (10.0 * G * h * H0 * mass)**(1.0 / 3.0)
 
-# 1st col Mgas, 2nd col Mdyn
-data = np.loadtxt('data.txt', skiprows = 1, usecols = (1, 2))
 
-gas_mass = data[:, 0] * fac
-stars_mass = (1.0 / float(values[idx['GasFraction']]) - 1.0) * gas_mass
-dm_mass = sm_hm_fac * stars_mass
-
-tot_mass = gas_mass + stars_mass + dm_mass
-
-concentrations = halo_concentration(tot_mass)
-circ_vels = mass_to_vel(tot_mass)
-
-disk_mass_frac = (gas_mass + stars_mass) / tot_mass
-bulge_mass_frac = np.zeros(len(disk_mass_frac))  # Assume the bulge could not have formed in 1.4Gyr without many mergers
-
-bh_mass_frac = gas_mass_resol / tot_mass
-
-# Disk and bulge have mass fractions that we will use based on the Milky-Way
-bulge_mass = bulge_mass_frac * tot_mass
-disk_mass = disk_mass_frac * tot_mass
-
-Ngas = gas_mass / gas_mass_resol
-Ndm = dm_mass / dm_mass_resol
-Nstars = stars_mass / stars_mass_resol
-Nbulge = bulge_mass / bulge_mass_resol
-
-# Loop through each row from the data and make the new parameters
-for i in range(0, len(data)):
-    print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
-    print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
-    print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
-    print('DM mass, #: %g, %d' % (dm_mass[i], Ndm[i]))
-    print()
-
-    tmp_values = values
-    tmp_label = next(labels)
-    
-    tmp_values[idx['OutputFile']] = tmp_label + '.hdf5'
-    
-    tmp_values[idx['CC']] = str(concentrations[i])
-    tmp_values[idx['V200']] = str(circ_vels[i])
-    
-    tmp_values[idx['MB']] = str(float(bulge_mass_frac[i]))
-    tmp_values[idx['MD']] = str(float(disk_mass_frac[i]))
-    tmp_values[idx['JD']] = str(float(disk_mass_frac[i]))
-
-    tmp_values[idx['N_HALO']] = str(int(Ndm[i]))
-    tmp_values[idx['N_DISK']] = str(int(Nstars[i]))
-    tmp_values[idx['N_GAS']] = str(int(Ngas[i]))
-    tmp_values[idx['N_BULGE']] = str(int(Nbulge[i]))
-   
-    tmp_values[idx['MBH']] = str(float(bh_mass_frac[i]))
-
-    with open(folder + '/' + tmp_label + '.txt', 'w') as f:
-        for key in keys:
-            f.write(key + '\t\t\t\t' + tmp_values[idx[key]] + '\n')
-    
-
-total_Ngas = np.sum(Ngas)
-total_Ndm = np.sum(Ndm)
-total_Nstars = np.sum(Nstars)
-total_Nbulge = np.sum(Nbulge)
-
-total_part = total_Ngas + total_Ndm + total_Nstars + total_Nbulge
-
-print('TotNgas: %g' % total_Ngas)
-print('TotNdm: %g' % total_Ndm)
-print('TotNstars: %g' % total_Nstars)
-print('TotNbulge: %g' % total_Nbulge)
-print('TotPart: %g' % total_part)
