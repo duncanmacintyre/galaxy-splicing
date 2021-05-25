@@ -136,9 +136,12 @@ for i, key in enumerate(keys):
 #       output_folder is the path in which to save the parameter files
 #       mass_file is the path to a CSV file with columns label, Mgas, M*, Mvir
 #       write is whether to actually write any files (default True, of course)
+#       verbose is whether to print particle numbers for each galaxy (default False)
 # You can pass additional keyword arguments. These will become new default values for
 # makegalaxy parameters. e.g. pass REDSHIFT=2 to set the redshift parameter to 2.
-def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str, write: bool = True, **kwargs):
+def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str,
+                               write: bool = True, verbose: bool = False,
+                               **kwargs):
 
     # mass per particle of each kind
     stars_mass_resol = gas_mass_resol
@@ -197,11 +200,12 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     if write:
         # loop through each row from the data and make the new parameters
         for i in range(0, M):
-            # print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
-            # print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
-            # print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
-            # print('DM mass, #: %g, %d' % (dm_mass[i], Ndm[i]))
-            # print()
+            if verbose:
+                print('Preparing to write for {}'.format(masses.loc[keep, 'label'][i]))
+                print('Gas mass, #: %g, %d' % (gas_mass[i], Ngas[i]))
+                print('Disk mass, #: %g, %d' % (disk_mass[i], Nstars[i]))
+                print('Bulge mass, #: %g, %d' % (bulge_mass[i], Nbulge[i]))
+                print('DM mass, #: %g, %d' % (dm_mass[i], Ndm[i]))
 
             tmp_values = values
             tmp_label = next(labels)
@@ -226,9 +230,15 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
            
             tmp_values[idx['MBH']] = str(float(bh_mass_frac[i]))
 
+            if verbose:
+                print('Writing file ' + output_folder + '/' + tmp_label + '.txt')
+                print()
             with open(output_folder + '/' + tmp_label + '.txt', 'w') as f:
                 for key in keys:
                     f.write(key + '\t\t\t\t' + tmp_values[idx[key]] + '\n')
+        if verbose:
+            print('Done writing files')
+            print()
     
     # --- compute total number of particles in all galaxies, print this ---
 
@@ -239,7 +249,21 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     total_Nstars = np.sum(Nstars)
     total_Nbulge = np.sum(Nbulge)
 
-    total_part = total_Ngas + total_Ndm + total_Nstars + total_Nbulge
+    N = Ngas + Ndm + Nstars + Nbulge
+    total_part = np.sum(N)
+
+    if verbose:
+        print()
+        print('SUMMARY OF PARTICLE NUMBERS')
+        print()
+        print(pandas.DataFrame({'label':masses.loc[keep, 'label'],
+                                'mass':tot_mass,
+                                'Ngas':Ngas,
+                                'Ndm':Ndm,
+                                'Nstars':Nstars,
+                                'Nbulge':Nbulge,
+                                'total':N}).to_string())
+        print()
 
     print('{} galaxies of total mass {:.3e}'.format(M, total_mass))
     print('TotNgas: %g' % total_Ngas)

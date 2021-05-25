@@ -12,7 +12,7 @@ gas_mass_resol = 1.e7
 output_folder = './makegalaxy_test'
 mass_file = './masses_Rennehan_2020.csv'
 
-generate_makegalaxy_params(gas_mass_resol, output_folder, mass_file, REDSHIFT=4.434, Omega_m0=0.3, Omega_L0=0.7)
+generate_makegalaxy_params(gas_mass_resol, output_folder, mass_file, REDSHIFT=4.434, Omega_m0=0.3, Omega_L0=0.7, verbose=True)
 
 # PART 2
 
