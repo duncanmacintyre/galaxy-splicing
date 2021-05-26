@@ -195,6 +195,8 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     Nstars = stars_mass / stars_mass_resol
     Nbulge = bulge_mass / bulge_mass_resol
 
+    fgas = gas_mass / (stars_mass + gas_mass)
+
     # --- write the parameter files ---
 
     if write:
@@ -258,6 +260,7 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
         print()
         print(pandas.DataFrame({'label':masses.loc[keep, 'label'],
                                 'mass':tot_mass,
+                                'fgas':fgas,
                                 'Ngas':Ngas,
                                 'Ndm':Ndm,
                                 'Nstars':Nstars,
