@@ -153,7 +153,7 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     # load the gas, stellar, and halo masses from a CSV file
     # the CSV must use commas for delimeters and have at least these columns:
     #   label, Mgas, M*, Mvir
-    masses = pandas.read_csv(mass_file) # type: pandas.DataFrame
+    masses = pandas.read_fwf(mass_file) # type: pandas.DataFrame
     # masses['label'] has the labels C1, C2, C3, ... as strings
     # masses['Mgas'] has the gas masses
     # masses['M*'] has the stellar masses
