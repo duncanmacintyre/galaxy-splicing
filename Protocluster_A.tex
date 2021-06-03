@@ -1,0 +1,132 @@
+%-------------------------------------------------------------------------
+%----  This file contains the input parameters needed at run-time for 
+%       simulations. It is based on and closely resembles the GADGET-3
+%       parameterfile (format of which and parsing routines written by 
+%       Volker Springel [volker.springel@h-its.org]). It has been updated
+%       with new naming conventions and additional variables as needed by 
+%       Phil Hopkins [phopkins@caltech.edu] for GIZMO.
+%-------------------------------------------------------------------------
+
+%----  Relevant files
+InitCondFile /scratch/b/babul/rennehan/data/tests/A
+%InitCondFile ./snapshot_001
+OutputDir     /mnt/home/drennehan/projects/SPT2349_1e6
+
+%---- File formats 
+ICFormat    3  % 1=binary, 3=hdf5, 4=cluster 
+SnapFormat  3  % 1=binary, 3=hdf5 
+
+%---- Output parameters 
+RestartFile                 restart
+SnapshotFileBase            snapshot
+OutputListOn                0  % =1 to use list in "OutputListFilename" 
+OutputListFilename          output_times.txt  % list of times for snaps 
+NumFilesPerSnapshot         1
+NumFilesWrittenInParallel   1  % must be < N_processors & power of 2
+
+%---- Output frequency 
+TimeOfFirstSnapshot     0.0
+TimeBetSnapshot         0.01 
+TimeBetStatistics       0.05 
+
+%---- CPU-time limits 
+TimeLimitCPU            259200  % in seconds 
+CpuTimeBetRestartFile   3500    % in seconds 
+ResubmitOn              0
+ResubmitCommand         job.bash
+
+%----- Memory alloction 
+MaxMemSize          4400    % sets maximum MPI process memory use in MByte 
+PartAllocFactor     3.0     % memory load allowed for better cpu balance 
+BufferSize          100     % in MByte 
+
+%---- Characteristics of run 
+TimeBegin   0.0    % Beginning of the simulation 
+TimeMax     2.0    % End of the simulation 
+
+%---- Cosmological parameters 
+ComovingIntegrationOn   0       % is it cosmological? (yes=1, no=0)
+BoxSize                 10000.  % in code units
+Omega0                  0       % =0 for non-cosmological
+OmegaLambda             0       % =0 for non-cosmological
+OmegaBaryon             0       % =0 for non-cosmological
+HubbleParam             1.0     % little 'h'; =1 for non-cosmological runs
+
+%---- Accuracy of time integration 
+MaxSizeTimestep         5.0e-3   % in code units, set for your problem
+MinSizeTimestep         1.0e-12 % set this very low, or risk stability
+
+%---- Tree algorithm, force accuracy, domain update frequency 
+TreeDomainUpdateFrequency   0.05        % 0.0005-0.05, dept on core+particle number  
+
+%---- System of units 
+UnitLength_in_cm            3.085678e21     % 1.0 kpc/h
+UnitMass_in_g               1.989e43  	    % 1.0e10 solar masses/h
+UnitVelocity_in_cm_per_s    1.0e5   	    % 1 km/sec
+UnitMagneticField_in_gauss  1.0   	        % 1 gauss
+GravityConstantInternal     0		        % calculated by code if =0
+
+%---- Initial temperature & temperature floor 
+InitGasTemp     0.	    % set by IC file if =0 
+MinGasTemp      10.	    % don't set <10 in explicit feedback runs, otherwise 0
+
+%---- Density/volume estimation (kernel) 
+DesNumNgb               32      % 32 for standard kernel, 60-114 for quintic 
+MaxHsml                 1000  % some very large value (here to prevent errors)
+MinHsml                 0       % minimum gas kernel length  (=0, should be <=SofteningGasMaxPhys)
+MinGasHsmlFractional	1.0
+
+SofteningGas    0.5    % gas (type=0) (in units above, =1 pc softening)
+SofteningHalo   0.5 % dark matter/collisionless particles (type=1)
+SofteningDisk   1.0   % collisionless particles (type=2)
+SofteningBulge  1.0  % collisionless particles (type=3)
+SofteningStars  0.5  % stars spawned from gas (type=4)
+SofteningBndry  0.5  % black holes (if active), or collisionless (type=5)
+%---- if these are set in cosmo runs, SofteningX switches from comoving to physical
+%------- units when the comoving value exceeds the choice here
+SofteningGasMaxPhys     0.5    % switch to 0.5pc physical below z=1 
+SofteningHaloMaxPhys    0.5
+SofteningDiskMaxPhys    1.0
+SofteningBulgeMaxPhys   1.0
+SofteningStarsMaxPhys   0.5
+SofteningBndryMaxPhys   0.5
+
+%----- parameters for adaptive gravitational softening 
+AGS_DesNumNgb           32  % neighbor number for calculating adaptive gravsoft
+
+
+%---- Star Formation parameters (GALSF on)
+CritPhysDensity     0.2    %  critical physical density for star formation (cm^(-3)) 
+SfEffPerFreeFall    0.02   %  SFR/(Mgas/tfreefall) for gas which meets SF criteria 
+InitMetallicity     0.01 % Fraction of solar metallicity
+
+%---- sub-grid (Springel+Hernquist/GADGET/AREPO) "effective equation of state" 
+%------- star formation+feedback model (GALSF_EFFECTIVE_EQS on)
+MaxSfrTimescale     2.8         % code units (SF timescale at 2-phase threshold)
+TempSupernova       4.87e7       % in Kelvin (temp of hot gas in 2-phase model)
+TempClouds          10000.0      % in Kelvin (temp of cold gas in 2-phase model)
+FactorSN            0.18         % SNe coupling frac (frac of egy retained in hot)
+FactorEVP           3000.0      % controls Kennicutt normalization 
+FactorForSofterEQS  1.0         % interpolate between 'stiff' and isothermal EOS
+%------- the sub-grid "decoupled winds" model (GALSF_SUBGRID_WINDS on)
+WindEfficiency          2.0     % Not used with Illustris model 
+WindEnergyFraction      0.0519  % Value used in old Illustris, a bit smaller than TNG
+WindFreeTravelMaxTime   0.1     % 'free-stream time' in units of t_Hubble(z)
+WindFreeTravelDensFac   0.01     % 'free-stream' until density < this * CritPhysDensity
+
+%-------------- Black Hole accretion & formation (BLACK_HOLES on)
+TimeBetOnTheFlyFoF           1.1            % time (in sec) between FoF searches --> DAA: this is t
+BlackHoleAccretionFactor     1.0            % multiplier for mdot
+BlackHoleEddingtonFactor     1.0           % fraction of eddington to cap (can be >1)
+BlackHoleNgbFactor           4              % multiplier for kernel neighbors for BH
+BlackHoleMaxAccretionRadius  2              % max radius for BH neighbor search/accretion
+BlackHoleRadiativeEfficiency 0.1        % radiative efficiency
+BlackHoleFeedbackFactor      0.05           % generic feedback strength multiplier 
+SeedBlackHoleMass            0
+BAL_v_outflow                1e4        % v_wind in km/s
+VariableWindVelFactor        5.0        % Zhu & Li 2016 Apj (MFM comparison)
+VariableWindSpecMomentum     0.
+
+%-------------- Grackle UVB file (GRACKLE on)
+%GrackleDataFile                      /home/rennehan/data/cloudy/CloudyData_UVB=HM2012_shielded.h5
+GrackleDataFile                 /scratch/b/babul/rennehan/data/cloudy/CloudyData_UVB=HM2012_shielded.h5
