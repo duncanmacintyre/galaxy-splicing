@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 from argparse import ArgumentParser
 import os.path
-import sys.stdout
+import sys
 
 # ---------- argument parsing
 
