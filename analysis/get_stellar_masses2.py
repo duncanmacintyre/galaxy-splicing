@@ -1,18 +1,58 @@
+#!/bin/python
+# DR: original version of code (for 2020 Rennehan et al. paper)
+# DM: rewrote to make it easy to change radii, added more output files, refactored
+#     for speed, readability, and versatility (June 2021)
+#
+# use --help for usage
+# warning: currently there will be bugs if --mmg is used
+#
+
 import h5py
 import numpy as np
 from argparse import ArgumentParser
 import os.path
+import sys.stdout
 
-# warning: currently there will be bugs if --mmg is used
+# ---------- argument parsing
+
+print('Starting get_stellar_masses')
 
 parser = ArgumentParser()
-parser.add_argument('data_dir')
-parser.add_argument('--mmg', action = 'store_true')  # Use most massive galaxy rather than peak brightness
+parser.add_argument('data_dir', help='path to directory containing snapshot files')
+g1 = parser.add_mutually_exclusive_group(required=True)
+g1.add_argument('-R', nargs='+', type=float, help='radii to use')
+g1.add_argument('-r', nargs=2, metavar=('DR', 'MAX_R'), type=float, help='will use radii DR, 2DR, 3DR, ... up to but not including MAX_R')
+g2 = parser.add_mutually_exclusive_group(required=True)
+g2.add_argument('-N', nargs='+', type=int, help='the snapshot file numbers to use')
+g2.add_argument('-n', type=int, metavar='MAX_SNAP', help='use snapshot numbers 0, 1, 2, 3, ... up to but not including MAX_SNAP; e.g. use 100 for 0 through 99')
+parser.add_argument('--mmg', action = 'store_true', help='use most massive galaxy for centre rather than peak brightness; not currently working')
+parser.add_argument('-d', default='  ', help='separator between fields in the output files; default two spaces')
+parser.add_argument('-p', default=6, type=int, help='how many significant figures to use in the output file; default 6')
+parser.add_argument('-w', default=11, type=int, help='all fields padded to be at least this width in the output file; default 11')
 args = parser.parse_args()
+
+# data_dir - the path to the folder containing snapshot files
 data_dir = args.data_dir
+
+# R - the radii we will use
+if args.R is not None: # -R was given
+    R = args.R
+else: # -r was given
+    R = np.arange(args.r[0], args.r[1], args.r[0])
+assert(len(R)>0)
+assert(all(r>0 for r in R))
+
+# snaps - the numbers of the snapshot files to process
+if args.N is not None: # -N was given
+    snaps = args.N 
+else: # -n was given
+    snaps = np.arange(0, args.n)
+assert(len(snaps)>0)
+assert(all(n>=0 for n in snaps))
+
+# initialize variables based on mmg
 if args.mmg:
     particle_ids_center = np.loadtxt(os.path.join(data_dir, 'mmg_particle_ids.txt'))
-if args.mmg:
     save_file = os.path.join(data_dir, 'star_mass_data_mmg.txt')
     save_file_x = os.path.join(data_dir, 'star_mass_data_mmg_x.txt')
     save_file_mean = os.path.join(data_dir, 'star_mass_data_mmg_mean.txt')
@@ -21,14 +61,12 @@ else:
     save_file_x = os.path.join(data_dir, 'star_mass_data_x.txt')
     save_file_mean = os.path.join(data_dir, 'star_mass_data_mean.txt')
 
-
-# ---------- parameters
-
-snaps = np.arange(0, 3) # numbers of snapshot files to process
-R = [30, 50, 70] # radii within which to compute mass
-delimiter = '  ' # separator between fields in the output file
-precision = 6 # significant figures to use in the output file
-fieldwidth = 11 # all fields padded to be at least this width in the output file
+# output formatting
+delimeter = args.d # separator between fields in the output file
+precision = args.p # significant figures to use in the output file
+assert(precision > 0)
+fieldwidth = args.w # all fields padded to be at least this width in the output file
+assert(fieldwidth > 0)
 
 
 # ---------- functions
@@ -64,6 +102,7 @@ def generator_fcn(data_dir, snaps):
 
         data_file = os.path.join(data_dir, 'snapshot_{}.hdf5'.format(str(snap).zfill(3)))
         print('Operating on {}'.format(data_file))
+        sys.stdout.flush()
 
         with h5py.File(data_file, 'r') as f:
             disk_ids = np.array(f['/PartType2/ParticleIDs'])
@@ -131,6 +170,7 @@ def generator_fcn(data_dir, snaps):
 
 # ---------- beginning of script part
 
+print('Beginning computations...')
 # compute 2D array of output
 output_matrix = np.fromiter(
         generator_fcn(data_dir, snaps),
