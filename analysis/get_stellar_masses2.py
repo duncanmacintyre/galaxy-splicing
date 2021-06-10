@@ -15,8 +15,6 @@ import sys
 
 # ---------- argument parsing
 
-print('Starting get_stellar_masses')
-
 parser = ArgumentParser()
 parser.add_argument('data_dir', help='path to directory containing snapshot files')
 g1 = parser.add_mutually_exclusive_group(required=True)
@@ -25,6 +23,9 @@ g1.add_argument('-r', nargs=2, metavar=('DR', 'MAX_R'), type=float, help='will u
 g2 = parser.add_mutually_exclusive_group(required=True)
 g2.add_argument('-N', nargs='+', type=int, help='the snapshot file numbers to use')
 g2.add_argument('-n', type=int, metavar='MAX_SNAP', help='use snapshot numbers 0, 1, 2, 3, ... up to but not including MAX_SNAP; e.g. use 100 for 0 through 99')
+g3 = parser.add_mutually_exclusive_group(required=False)
+g3.add_argument('-T', nargs='+', type=float, help='the times for each snapshot number')
+g3.add_argument('-t', metavar='DT', type=float, help='snapshots have time N*DT where N is snapshot number')
 parser.add_argument('--mmg', action = 'store_true', help='use most massive galaxy for centre rather than peak brightness; not currently working')
 parser.add_argument('-d', default='  ', help='separator between fields in the output files; default two spaces')
 parser.add_argument('-p', default=6, type=int, help='how many significant figures to use in the output file; default 6')
@@ -36,19 +37,30 @@ data_dir = args.data_dir
 
 # R - the radii we will use
 if args.R is not None: # -R was given
-    R = args.R
+    R = np.array(args.R)
 else: # -r was given
     R = np.arange(args.r[0], args.r[1], args.r[0])
-assert(len(R)>0)
-assert(all(r>0 for r in R))
+assert(len(R) > 0)
+assert(all(R > 0))
 
 # snaps - the numbers of the snapshot files to process
 if args.N is not None: # -N was given
-    snaps = args.N 
+    snaps = np.array(args.N)
 else: # -n was given
     snaps = np.arange(0, args.n)
-assert(len(snaps)>0)
-assert(all(n>=0 for n in snaps))
+assert(len(snaps) > 0)
+assert(all(snaps >= 0))
+
+# t - the time associated with snapshots
+if args.T is not None:
+    t = np.array(args.T).reshape(-1, 1)
+    assert(all(t >= 0))
+    assert(len(t) == len(snaps))
+elif args.t is not None:
+    assert(args.t > 0)
+    t = (args.t * snaps).reshape(-1, 1)
+else:
+    t = None
 
 # initialize variables based on mmg
 if args.mmg:
@@ -62,7 +74,7 @@ else:
     save_file_mean = os.path.join(data_dir, 'star_mass_data_mean.txt')
 
 # output formatting
-delimeter = args.d # separator between fields in the output file
+delimiter = args.d # separator between fields in the output file
 precision = args.p # significant figures to use in the output file
 assert(precision > 0)
 fieldwidth = args.w # all fields padded to be at least this width in the output file
@@ -171,37 +183,65 @@ def generator_fcn(data_dir, snaps):
 # ---------- beginning of script part
 
 print('Beginning computations...')
+
+# number of columns in output before the radial bin columns
+n_head_cols = 3 if t is not None else 2
+
 # compute 2D array of output
 output_matrix = np.fromiter(
         generator_fcn(data_dir, snaps),
         dtype='float',
         count=len(snaps)*(2+4*len(R))
     ).reshape((len(snaps), 2+4*len(R)))
+
+# if time is set, add a column for time
+if t is not None:
+    output_matrix = np.concatenate((t, output_matrix), axis=1)
+
 # extract only part for cylinder about x-axis
-output_matrix_x = output_matrix[:, (0, 1, *range(2+len(R), 2+2*len(R)))]
+output_matrix_x = output_matrix[:, (*range(n_head_cols), *range(n_head_cols+len(R), n_head_cols+2*len(R)))]
 # compute mean results for the three cylinder orientations
 output_matrix_mean = np.concatenate((
-        output_matrix[:, (0,1)],
-        (output_matrix[:,2+len(R):2+2*len(R)]
-         + output_matrix[:,2+2*len(R):2+3*len(R)]
-         + output_matrix[:,2+3*len(R):2+4*len(R)])
+        output_matrix[:, 0:n_head_cols],
+        (output_matrix[:,n_head_cols+len(R):n_head_cols+2*len(R)]
+         + output_matrix[:,n_head_cols+2*len(R):n_head_cols+3*len(R)]
+         + output_matrix[:,n_head_cols+3*len(R):n_head_cols+4*len(R)])
         / 3.),
     axis=1)
+
 # make headers for save files
-header = delimiter.join((s.ljust(fieldwidth) for s in (
-        'Formed',
-        'Total',
-        *("s{:.1f}kpc".format(r) for r in R),
-        *("x{:.1f}kpc".format(r) for r in R),
-        *("y{:.1f}kpc".format(r) for r in R),
-        *("z{:.1f}kpc".format(r) for r in R),
-    )))
-header_x = delimiter.join((s.ljust(fieldwidth) for s in (
-        'Formed',
-        'Total',
-        *("{:.1f}kpc".format(r) for r in R),
-    )))
+if t is not None:
+    header = delimiter.join((s.ljust(fieldwidth) for s in (
+            'Time',
+            'Formed',
+            'Total',
+            *("s{:.1f}kpc".format(r) for r in R),
+            *("x{:.1f}kpc".format(r) for r in R),
+            *("y{:.1f}kpc".format(r) for r in R),
+            *("z{:.1f}kpc".format(r) for r in R),
+        )))
+    header_x = delimiter.join((s.ljust(fieldwidth) for s in (
+            'Time',
+            'Formed',
+            'Total',
+            *("{:.1f}kpc".format(r) for r in R),
+        )))
+else:
+    header = delimiter.join((s.ljust(fieldwidth) for s in (
+            'Formed',
+            'Total',
+            *("s{:.1f}kpc".format(r) for r in R),
+            *("x{:.1f}kpc".format(r) for r in R),
+            *("y{:.1f}kpc".format(r) for r in R),
+            *("z{:.1f}kpc".format(r) for r in R),
+        )))
+    header_x = delimiter.join((s.ljust(fieldwidth) for s in (
+            'Formed',
+            'Total',
+            *("{:.1f}kpc".format(r) for r in R),
+        )))
 header_mean = header_x
+
 # save to txt files
 np.savetxt(save_file, output_matrix,
            fmt='%{:d}.{:d}g'.format(fieldwidth, precision), delimiter=delimiter,
