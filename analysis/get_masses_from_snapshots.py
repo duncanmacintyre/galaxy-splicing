@@ -140,7 +140,7 @@ if not args.mmg: # --mmg was not specified
     map_slope = (up_limit - low_limit) / bins
     map_offset = low_limit
     def recenter(masses, coords):
-        hist, be = np.histogramdd(coords, bins = bins, range = bounds)
+        hist, _ = np.histogramdd(coords, bins = bins, range = bounds)
         pos = np.argwhere(hist == hist.max())[0]
 
         center_offset = np.array([
