@@ -1,0 +1,23 @@
+#!/bin/python
+
+import sys
+import os
+
+template = """#!/bin/bash
+#SBATCH --time=00:40:00   # walltime in d-hh:mm or hh:mm:ss format
+#SBATCH --job-name="mg {0}"
+#SBATCH --output={0}.slurm_log
+#SBATCH --error={0}.slurm_error
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=dm1@student.ubc.ca
+#SBATCH --mem=1300  # max memory
+echo Time: $(date)
+echo "Starting makegalaxy for {0}. The job ID is $SLURM_JOBID."
+echo $SLURM_JOBID >> job_ids.txt
+makegalaxy_e1dcb87 {0}
+"""
+
+for fname in sys.argv[1:]:
+    with open(fname + ".makegalaxyjob.sh", "w") as f:
+        f.write(template.format(fname))
+    os.system("sbatch " + fname + ".makegalaxyjob.sh")  
