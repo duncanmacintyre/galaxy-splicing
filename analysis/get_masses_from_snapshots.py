@@ -1,7 +1,7 @@
 #!/bin/python
-# DR: original version of code (for 2020 Rennehan et al. paper)
-# DM: rewrote to make it easy to change radii, added more output files, refactored
-#     for speed, readability, and versatility (June 2021)
+# DR: original version of code for stellar mass (for 2020 Rennehan et al. paper)
+# DM: vastly rewrote to make it easy to change radii, added more output files,
+#     refactored for speed, memory, readability, and versatility (June 2021)
 #
 # use --help for usage
 # warning: currently there will be bugs if --mmg is used
@@ -130,28 +130,31 @@ else: # --where was specified
 
         return np.where(radii.reshape(1,-1) < R.reshape(-1,1), masses.reshape(1,-1), 0).sum(axis=1)
 
+# --- locate_peak_density_3D
+# given an Nx3 array a of coordinates, return coordinates of the location with greatest density
+#   bins into nbins^3 bins and returns float numpy.array (length three) giving coordinates for bin with most items
+#   only considers the domain [-cube_radius, cube_radius] in each of the three directions
+#   returns np.array([0, 0, 0]) if a is empty
+if not args.mmg:
+    def locate_peak_density_3D(a, cube_radius, nbins):
+        edges, d_edges = np.linspace(-cube_radius, cube_radius, num=(nbins+1), retstep=True)
+        x, y, z = a[:,0], a[:,1], a[:,2]
+        max_count = 0
+        max_bin = np.array((0, 0, 0),)
+        for x_left, x_right in zip(edges, edges[1:]):
+            indeces_x = (x_left < x) & (x < x_right)
+            for y_left, y_right in zip(edges, edges[1:]):
+                indeces_xy = indeces_x & (y_left <= y) & (y < y_right)
+                for z_left, z_right in zip(edges, edges[1:]):
+                    count_in_this_bin = np.sum(indeces_xy & (z_left <= z) & (z < z_right))
+                    if count_in_this_bin > max_count:
+                        max_count = count_in_this_bin
+                        max_bin[:] = (x_left, y_left, z_left)
+        return max_bin + 0.5 * d_edges
+
 # --- recenter
 # given masses and coordinates, return coordinates shifted to center on peak brightness or most massive galaxy
-if not args.mmg: # --mmg was not specified
-    bins = 512
-    low_limit = -75
-    up_limit = 75
-    bounds = [[low_limit, up_limit], [low_limit, up_limit], [low_limit, up_limit]]
-    map_slope = (up_limit - low_limit) / bins
-    map_offset = low_limit
-    def recenter(masses, coords):
-        hist, _ = np.histogramdd(coords, bins = bins, range = bounds)
-        pos = np.argwhere(hist == hist.max())[0]
-
-        center_offset = np.array([
-                map_slope * pos[0] + map_offset, # x coord for centre of mass
-                map_slope * pos[1] + map_offset, # y coord for centre of mass
-                map_slope * pos[2] + map_offset # z coord for centre of mass
-            ])
-
-        return coords - center_offset
-
-else: # --mmg was specified
+if args.mmg: # --mmg was not specified
     particle_ids_center = np.loadtxt(os.path.join(data_dir, 'mmg_particle_ids.txt'))
     def recenter(masses, coords, disk_ids):   # this function won't currently be working as written
         if data_dir == 'SPT2349_1e6_gf0.9':
@@ -209,11 +212,14 @@ if not args.mmg: # --mmg was not specified
             halo_masses = np.array(f['/PartType1/Masses']) * 1e10
             halo_coords = np.array(f['/PartType1/Coordinates'])
             
-            # all stars, both initial and formed
-            star_masses = np.concatenate((disk_masses, formed_stellar_masses), axis=0)
-            star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
+        # all stars, both initial and formed
+        star_masses = np.concatenate((disk_masses, formed_stellar_masses), axis=0)
+        star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
 
-        return tuple(process_snapshot_helper(m, recenter(m, c), time) for m, c in (
+        # find peak brightness
+        centre = locate_peak_density_3D(star_coords, cube_radius=75, nbins=512).reshape((1, 3))
+
+        return tuple(process_snapshot_helper(m, c - centre, time) for m, c in (
                 (star_masses, star_coords),
                 (formed_stellar_masses, formed_stellar_coords),
                 (gas_masses, gas_coords),
