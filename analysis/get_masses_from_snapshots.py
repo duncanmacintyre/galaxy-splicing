@@ -133,24 +133,27 @@ else: # --where was specified
 # --- locate_peak_density_3D
 # given an Nx3 array a of coordinates, return coordinates of the location with greatest density
 #   bins into nbins^3 bins and returns float numpy.array (length three) giving coordinates for bin with most items
-#   only considers the domain [-cube_radius, cube_radius] in each of the three directions
+#   only considers the domain (-cube_radius, cube_radius) in each of the three directions
 #   returns np.array([0, 0, 0]) if a is empty
 if not args.mmg:
     def locate_peak_density_3D(a, cube_radius, nbins):
+        # construct array with edges of bins (same edges for each of the three dimensions)
+        # there will be nbins^3 bins; each bin can be described by the indices for the right edge:
+        #   for example, a bin with indices 100, 20, and 31 could be said to occupy the cube with
+        #   edges[99] ≤ x < edges[100], edges[19] ≤ y < edges[20]], and edges[30] ≤ z < edges[31]
         edges, d_edges = np.linspace(-cube_radius, cube_radius, num=(nbins+1), retstep=True)
-        x, y, z = a[:,0], a[:,1], a[:,2]
-        max_count = 0
-        max_bin = np.array((0, 0, 0),)
-        for x_left, x_right in zip(edges, edges[1:]):
-            indeces_x = (x_left < x) & (x < x_right)
-            for y_left, y_right in zip(edges, edges[1:]):
-                indeces_xy = indeces_x & (y_left <= y) & (y < y_right)
-                for z_left, z_right in zip(edges, edges[1:]):
-                    count_in_this_bin = np.sum(indeces_xy & (z_left <= z) & (z < z_right))
-                    if count_in_this_bin > max_count:
-                        max_count = count_in_this_bin
-                        max_bin[:] = (x_left, y_left, z_left)
-        return max_bin + 0.5 * d_edges
+        # unique is a Nx3 array where N is the number of bins containing at least one particle and
+        #   where unique[i,0], unique[i,1], and unique[i,2] give the x, y, and z indices for ith bin
+        # unique_counts is a one-dimensional array of same length as unique giving count in each bin
+        unique, unique_counts = np.unique(
+            np.searchsorted(edges, a[np.all(np.absolute(a) < cube_radius, axis=1)], side='right'),
+            return_counts=True,
+            axis=0)
+        # find the indices of the first bin with maximal count
+        bin_indices_of_maximum = unique[unique_counts.argmax()]
+        # we return the coordinates of this bin
+        return edges[bin_indices_of_maximum] - 0.5 * d_edges
+
 
 # --- recenter
 # given masses and coordinates, return coordinates shifted to center on peak brightness or most massive galaxy
