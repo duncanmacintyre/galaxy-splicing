@@ -31,6 +31,7 @@ g3.add_argument('-t', metavar='DT', type=float, help='snapshots have time N*DT w
 g4 = parser.add_mutually_exclusive_group(required=False)
 g4.add_argument('--print', action='store_true', help='print the results instead of saving them to files')
 g4.add_argument('--prefix', help='prepend PREFIX to all output file names')
+parser.add_argument('--no-weight', action='store_true', dest='no_weight', help='when binning, set origin at max star particle density rather than max star mass density; improves speed by about an order of magnitude')
 parser.add_argument('--where', action='store_true', help='use numpy.where and matrix sum instead of numpy.fromiter and iterative sum; may or may not be faster')
 parser.add_argument('--mmg', action='store_true', help='use most massive galaxy for centre rather than peak brightness; not currently working')
 parser.add_argument('-d', default='  ', help='separator between fields in the output files; default two spaces')
@@ -243,11 +244,12 @@ if not args.mmg: # --mmg was not specified
         star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
 
         # find peak brightness
-        centre = locate_peak_density_3D(
-            star_coords,
-            cube_radius=75,
-            nbins=512,
-            weights=star_masses).reshape((1, 3))
+        if args.no_weight:
+            centre = locate_peak_density_3D(
+                star_coords, cube_radius=75, nbins=512).reshape((1, 3))
+        else:
+            centre = locate_peak_density_3D(
+                star_coords, cube_radius=75, nbins=512, weights=star_masses).reshape((1, 3))
 
         return tuple(process_snapshot_helper(m, c - centre, time) for m, c in (
                 (star_masses, star_coords),
