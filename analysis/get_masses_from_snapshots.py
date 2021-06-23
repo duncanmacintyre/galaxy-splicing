@@ -153,14 +153,14 @@ if not args.mmg:
             #   where unique[i,0], unique[i,1], and unique[i,2] give the x, y, and z indices for ith bin
             # which_bin is a 1D array giving index in unique for each coordinate in a
             unique, which_bin = np.unique(
-                indices=np.searchsorted(edges, a[include], side='right'),
+                np.searchsorted(edges, a[include], side='right'),
                 return_inverse=True,
                 axis=0)
 
             # get weights in the domain
             w = weights[include]
             # sum the weights inside each bin
-            counts = np.fromiter((w[which_bin == i].sum() for i in len(unique)),
+            counts = np.fromiter((w[which_bin == i].sum() for i in range(len(unique))),
                                  dtype='float', count=len(unique))
 
         else:
@@ -168,7 +168,7 @@ if not args.mmg:
             #   where unique[i,0], unique[i,1], and unique[i,2] give the x, y, and z indices for ith bin
             # counts is a one-dimensional array of same length as unique giving count in each bin
             unique, counts = np.unique(
-                indices=np.searchsorted(edges, a[np.all(np.absolute(a) < cube_radius, axis=1)], side='right'),
+                np.searchsorted(edges, a[np.all(np.absolute(a) < cube_radius, axis=1)], side='right'),
                 return_counts=True,
                 axis=0)
 
