@@ -6,91 +6,100 @@ Filename: /home/dm1/git/galaxy-splicing/analysis/get_masses_from_snapshots_profi
 
 Line #    Mem usage    Increment   Line Contents
 ================================================
-   106  459.836 MiB 5590.703 MiB       @profile
+   106  459.848 MiB 5736.734 MiB       @profile
    107                                 def get_mass_in_cylinder(masses, coords, column_to_remove):
-   108  459.836 MiB -123.223 MiB           if column_to_remove is None:
-   109  483.312 MiB   25.590 MiB               radii = np.sqrt(coords[:,0]**2 + coords[:,1]**2 + coords[:,2]**2)
-   110  459.836 MiB  -89.273 MiB           elif column_to_remove == 0:
-   111  490.797 MiB   13.078 MiB               radii = np.sqrt(coords[:,1]**2 + coords[:,2]**2)
-   112  459.836 MiB  -59.516 MiB           elif column_to_remove == 1:
-   113  499.105 MiB   13.078 MiB               radii = np.sqrt(coords[:,0]**2 + coords[:,2]**2)
-   114  459.836 MiB  -29.758 MiB           elif column_to_remove == 2:
-   115  502.672 MiB   13.078 MiB               radii = np.sqrt(coords[:,0]**2 + coords[:,1]**2)
+   108  459.848 MiB    0.000 MiB           if column_to_remove is None:
+   109  498.262 MiB   55.527 MiB               radii = np.sqrt(coords[:,0]**2 + coords[:,1]**2 + coords[:,2]**2)
+   110  459.848 MiB    0.000 MiB           elif column_to_remove == 0:
+   111  498.266 MiB   42.836 MiB               radii = np.sqrt(coords[:,1]**2 + coords[:,2]**2)
+   112  459.848 MiB    0.000 MiB           elif column_to_remove == 1:
+   113  499.117 MiB   42.836 MiB               radii = np.sqrt(coords[:,0]**2 + coords[:,2]**2)
+   114  459.848 MiB    0.000 MiB           elif column_to_remove == 2:
+   115  502.684 MiB   42.836 MiB               radii = np.sqrt(coords[:,0]**2 + coords[:,1]**2)
    116                                     else:
    117                                         assert(False) # this line should never be reached
    118                             
-   119  502.676 MiB -38546.773 MiB           return np.fromiter((masses[radii < i].sum() for i in R), count=len(R), dtype='float')
+   119  503.027 MiB    4.934 MiB           return np.fromiter((masses[radii < i].sum() for i in R), count=len(R), dtype='float')
 
 
 Filename: /home/dm1/git/galaxy-splicing/analysis/get_masses_from_snapshots_profiling.py
 
 Line #    Mem usage    Increment   Line Contents
 ================================================
-   145  311.961 MiB 1226.512 MiB       @profile
-   146                                 def recenter(masses, coords):
-   147 1348.023 MiB 4144.418 MiB           hist, be = np.histogramdd(coords, bins = bins, range = bounds)
-   148 1348.023 MiB    0.020 MiB           pos = np.argwhere(hist == hist.max())[0]
-   149                             
-   150 1348.023 MiB    0.000 MiB           center_offset = np.array([
-   151 1348.023 MiB    0.000 MiB                   map_slope * pos[0] + map_offset, # x coord for centre of mass
-   152 1348.023 MiB    0.000 MiB                   map_slope * pos[1] + map_offset, # y coord for centre of mass
-   153 1348.023 MiB    0.000 MiB                   map_slope * pos[2] + map_offset # z coord for centre of mass
-   154                                         ])
-   155                             
-   156 1476.453 MiB  147.492 MiB           return coords - center_offset
+   141  294.820 MiB  294.820 MiB       @profile
+   142                                 def locate_peak_density_3D(a, cube_radius, nbins):
+   143                                     # construct array with edges of bins (same edges for each of the three dimensions)
+   144                                     # there will be nbins^3 bins; each bin can be described by the indices for the right edge:
+   145                                     #   for example, a bin with indices 100, 20, and 31 could be said to occupy the cube with
+   146                                     #   edges[99] ≤ x < edges[100], edges[19] ≤ y < edges[20]], and edges[30] ≤ z < edges[31]
+   147  294.852 MiB    0.031 MiB           edges, d_edges = np.linspace(-cube_radius, cube_radius, num=(nbins+1), retstep=True)
+   148                                     # unique is a Nx3 array where N is the number of bins containing at least one particle and
+   149                                     #   where unique[i,0], unique[i,1], and unique[i,2] give the x, y, and z indices for ith bin
+   150                                     # unique_counts is a one-dimensional array of same length as unique giving count in each bin
+   151  346.102 MiB    6.707 MiB           unique, unique_counts = np.unique(
+   152  339.395 MiB   44.543 MiB               np.searchsorted(edges, a[np.all(np.absolute(a) < cube_radius, axis=1)], side='right'),
+   153  339.395 MiB    0.000 MiB               return_counts=True,
+   154  339.395 MiB    0.000 MiB               axis=0)
+   155                                     # find the indices of the first bin with maximal count
+   156  346.102 MiB    0.000 MiB           bin_indices_of_maximum = unique[unique_counts.argmax()]
+   157                                     # we return the coordinates of this bin
+   158  346.102 MiB    0.000 MiB           return edges[bin_indices_of_maximum] - 0.5 * d_edges
 
 
 Filename: /home/dm1/git/galaxy-splicing/analysis/get_masses_from_snapshots_profiling.py
 
 Line #    Mem usage    Increment   Line Contents
 ================================================
-   196   61.773 MiB   61.773 MiB       @profile
-   197                                 def process_snapshot(snap, time=None):
-   198                             
-   199   61.965 MiB    0.191 MiB           data_file = os.path.join(data_dir, 'snapshot_{}.hdf5'.format(str(snap).zfill(3)))
-   200   61.965 MiB    0.000 MiB           print('Operating on {}'.format(data_file))
-   201   61.965 MiB    0.000 MiB           sys.stdout.flush()
-   202                             
-   203   62.715 MiB    0.750 MiB           with h5py.File(data_file, 'r') as f:
-   204   67.582 MiB    4.867 MiB               disk_masses = np.array(f['/PartType2/Masses']) * 1e10
-   205   74.156 MiB    6.574 MiB               disk_coords = np.array(f['/PartType2/Coordinates'])
-   206   74.156 MiB    0.000 MiB               try: # it may be that no stars have formed yet, in which case we get an error
-   207   82.402 MiB    8.246 MiB                   formed_stellar_masses = np.array(f['/PartType4/Masses']) * 1e10
-   208   95.324 MiB   12.922 MiB                   formed_stellar_coords = np.array(f['/PartType4/Coordinates'])
-   209                                         except:
-   210                                             formed_stellar_masses = np.empty((0,), dtype=disk_masses.dtype)
-   211                                             formed_stellar_coords = np.empty((0, 3), dtype=disk_coords.dtype)
-   212   95.324 MiB    0.000 MiB               gas_masses = np.array(f['/PartType0/Masses']) * 1e10
-   213   97.898 MiB    2.574 MiB               gas_coords = np.array(f['/PartType0/Coordinates'])
-   214  140.742 MiB   42.844 MiB               halo_masses = np.array(f['/PartType1/Masses']) * 1e10
-   215  269.246 MiB  128.504 MiB               halo_coords = np.array(f['/PartType1/Coordinates'])
-   216                                         
-   217                                         # all stars, both initial and formed
-   218  275.523 MiB    6.277 MiB               star_masses = np.concatenate((disk_masses, formed_stellar_masses), axis=0)
-   219  294.816 MiB   19.293 MiB               star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
-   220                             
-   221  331.336 MiB 1263.020 MiB           return tuple(process_snapshot_helper(m, recenter(m, c), time) for m, c in (
-   222  294.816 MiB    0.000 MiB                   (star_masses, star_coords),
-   223  294.816 MiB    0.000 MiB                   (formed_stellar_masses, formed_stellar_coords),
-   224  294.816 MiB    0.000 MiB                   (gas_masses, gas_coords),
-   225  294.816 MiB    0.000 MiB                   (halo_masses, halo_coords),
-   226                                         ))
+   201   61.777 MiB   61.777 MiB       @profile
+   202                                 def process_snapshot(snap, time=None):
+   203                             
+   204   61.957 MiB    0.180 MiB           data_file = os.path.join(data_dir, 'snapshot_{}.hdf5'.format(str(snap).zfill(3)))
+   205   61.957 MiB    0.000 MiB           print('Operating on {}'.format(data_file))
+   206   61.957 MiB    0.000 MiB           sys.stdout.flush()
+   207                             
+   208   62.707 MiB    0.750 MiB           with h5py.File(data_file, 'r') as f:
+   209   67.582 MiB    4.875 MiB               disk_masses = np.array(f['/PartType2/Masses']) * 1e10
+   210   74.160 MiB    6.578 MiB               disk_coords = np.array(f['/PartType2/Coordinates'])
+   211   74.160 MiB    0.000 MiB               try: # it may be that no stars have formed yet, in which case we get an error
+   212   82.406 MiB    8.246 MiB                   formed_stellar_masses = np.array(f['/PartType4/Masses']) * 1e10
+   213   95.332 MiB   12.926 MiB                   formed_stellar_coords = np.array(f['/PartType4/Coordinates'])
+   214                                         except:
+   215                                             formed_stellar_masses = np.empty((0,), dtype=disk_masses.dtype)
+   216                                             formed_stellar_coords = np.empty((0, 3), dtype=disk_coords.dtype)
+   217   95.332 MiB    0.000 MiB               gas_masses = np.array(f['/PartType0/Masses']) * 1e10
+   218   97.906 MiB    2.574 MiB               gas_coords = np.array(f['/PartType0/Coordinates'])
+   219  140.746 MiB   42.840 MiB               halo_masses = np.array(f['/PartType1/Masses']) * 1e10
+   220  269.328 MiB  128.582 MiB               halo_coords = np.array(f['/PartType1/Coordinates'])
+   221                                         
+   222                                     # all stars, both initial and formed
+   223  275.617 MiB    6.289 MiB           star_masses = np.concatenate((disk_masses, formed_stellar_masses), axis=0)
+   224  294.820 MiB   19.203 MiB           star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
+   225                             
+   226                                     # find peak brightness
+   227  295.074 MiB  295.074 MiB           centre = locate_peak_density_3D(star_coords, cube_radius=75, nbins=512).reshape((1, 3))
+   228                             
+   229  331.688 MiB 1312.371 MiB           return tuple(process_snapshot_helper(m, c - centre, time) for m, c in (
+   230  295.074 MiB    0.000 MiB                   (star_masses, star_coords),
+   231  295.074 MiB    0.000 MiB                   (formed_stellar_masses, formed_stellar_coords),
+   232  295.074 MiB    0.000 MiB                   (gas_masses, gas_coords),
+   233  295.074 MiB    0.000 MiB                   (halo_masses, halo_coords),
+   234                                         ))
 
 
 Filename: /home/dm1/git/galaxy-splicing/analysis/get_masses_from_snapshots_profiling.py
 
 Line #    Mem usage    Increment   Line Contents
 ================================================
-   262  440.477 MiB 1374.387 MiB   @profile
-   263                             def process_snapshot_helper(masses, coords, time):
-   264  447.961 MiB 1398.711 MiB       s = get_mass_in_cylinder(masses, coords, None)
-   265  456.270 MiB 1407.020 MiB       x = get_mass_in_cylinder(masses, coords, 0)
-   266  459.836 MiB 1410.586 MiB       y = get_mass_in_cylinder(masses, coords, 1)
-   267  459.840 MiB 1410.590 MiB       z = get_mass_in_cylinder(masses, coords, 2)
-   268  459.840 MiB  -29.758 MiB       mean = (x + y + z) / 3.
-   269  459.840 MiB  -29.758 MiB       if time is not None:
-   270  459.840 MiB -57926.590 MiB           return delimiter.join(formatter(x) for x in (time, np.sum(masses), len(masses), *s, *x, *y, *z, *z, *mean))
-   271                                 else:
-   272                                     return delimiter.join(formatter(x) for x in (np.sum(masses), len(masses), *s, *x, *y, *z, *z, *mean))
+   270  455.336 MiB 1423.219 MiB   @profile
+   271                             def process_snapshot_helper(masses, coords, time):
+   272  455.430 MiB 1436.082 MiB       s = get_mass_in_cylinder(masses, coords, None)
+   273  456.281 MiB 1436.934 MiB       x = get_mass_in_cylinder(masses, coords, 0)
+   274  459.848 MiB 1440.500 MiB       y = get_mass_in_cylinder(masses, coords, 1)
+   275  460.191 MiB 1440.844 MiB       z = get_mass_in_cylinder(masses, coords, 2)
+   276  460.191 MiB    0.000 MiB       mean = (x + y + z) / 3.
+   277  460.191 MiB    0.000 MiB       if time is not None:
+   278  460.191 MiB    0.031 MiB           return delimiter.join(formatter(x) for x in (time, np.sum(masses), len(masses), *s, *x, *y, *z, *z, *mean))
+   279                                 else:
+   280                                     return delimiter.join(formatter(x) for x in (np.sum(masses), len(masses), *s, *x, *y, *z, *z, *mean))
 
 
