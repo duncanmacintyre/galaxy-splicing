@@ -36,7 +36,7 @@ def find_nearest(array, value):
 #     return(profiles, interval, name)
 
 
-def compute_profiles(filepath, intervals, fcns=('min', 'median', 'max'), names=None, str_dtype='U32'):
+def compute_profiles(filepath, intervals, columns=None, fcns=('min', 'median', 'max'), names=None, str_dtype='U32'):
 
     intervals = np.array(intervals, dtype=float).reshape((-1, 2))
     assert(all(intervals[:,0] <= intervals[:,1]))
@@ -44,10 +44,12 @@ def compute_profiles(filepath, intervals, fcns=('min', 'median', 'max'), names=N
     if names is None:
         names = True if intervals.shape[0] > 1 else False
 
-    df = pandas.read_fwf(filepath).set_index('Time')
+    if columns is not None:
+        df = pandas.read_fwf(filepath).set_index('Time').loc[:, ['Total', *columns]]
+    else:
+        df = pandas.read_fwf(filepath).set_index('Time')
 
     intervals = amap(lambda x: find_nearest(df.index, x), intervals)
-    
 
     if names is True or names is False:
         interval_names = np.fromiter(('from {:.0f} to {:.0f} Myr'.format(x[0], x[1]) for x in intervals), count=intervals.shape[0], dtype=str_dtype)
@@ -101,15 +103,20 @@ def compute_profiles_from_files(filepaths, intervals, names=None, **kwargs):
 
 # ------ beginning of script part
 
+radii = np.loadtxt('../radius_bins.txt')
+
 profiles, total, intervals, names = compute_profiles_from_files(
-    ['SPT2349_1e6_gf0.5/star_mass_data_mean.txt', 'SPT2349_1e6_gf0.9/star_mass_data_mean.txt',
-     'SPT2349_1e6_real01/star_mass_data_mean.txt', 'SPT2349_1e6_real02/star_mass_data_mean.txt',
-     'SPT2349_1e6_real03/star_mass_data_mean.txt', 'SPT2349_1e6_real04/star_mass_data_mean.txt'],
-    [[700, 800], [700, 800], [700, 800], [700, 800], [700, 800], [700, 800]],
-    names=['fgas=0.5', 'fgas=0.9', 'fgas=0.7, real01', 'fgas=0.7, real02', 'fgas=0.7, real03', 'fgas=0.7, real04'])
+    ['SPT2349_1e6_gf0.9/mass_table_stars.txt',
+     'SPT2349_1e6_real01/mass_table_stars.txt', 'SPT2349_1e6_real02/mass_table_stars.txt',
+     'SPT2349_1e6_real03/mass_table_stars.txt', 'SPT2349_1e6_real04/mass_table_stars.txt'],
+    [[700, 800], [700, 800], [700, 800], [700, 800], [700, 800]],
+    columns=['{:.1f}kpc'.format(r) for r in radii],
+    names=['fgas=0.9', 'fgas=0.7, real01', 'fgas=0.7, real02', 'fgas=0.7, real03', 'fgas=0.7, real04'])
 
 # column names for fgas=0.7
 names7 = ['fgas=0.7, real01', 'fgas=0.7, real02', 'fgas=0.7, real03', 'fgas=0.7, real04']
+
+print(profiles)
 
 # mean profile for fgas=0.7
 mean = profiles.loc[:, [[s, 'median'] for s in names7]].mean(axis=1)
@@ -127,7 +134,7 @@ export_df = pandas.DataFrame(
     pandas.concat((pandas.Series({'Total':total.loc['median',names7].mean()}), mean), axis=0),
     columns=('from {:.0f} to {:.0f} Myr'.format(*i),))
 # save to file
-export_df.to_string('radial_profiles_{}.txt'.format('fgas=0.7_mean'), float_format=lambda x: '{:.5g}'.format(x))
+export_df.to_string('radial_profiles_stars_{}.txt'.format('fgas=0.7_mean'), float_format=lambda x: '{:.5g}'.format(x))
 
 # --- plot the profiles
 
@@ -145,7 +152,7 @@ ax.plot(radii, mean, linestyle='--', label='fgas=0.7, mean')
 ax.legend(loc='center left', bbox_to_anchor=(1.05, 0.6))
 ax.set_xlabel('Radius [kpc]')
 ax.set_ylabel('Mass contained [M☉]')
-ax.set_title('Radial distribution from {:.0f} to {:.0f} Myr'.format(*i))
+ax.set_title('Stellar mass radial distribution from {:.0f} to {:.0f} Myr'.format(*i))
 
 plt.savefig('radial-profiles.pdf')
 
