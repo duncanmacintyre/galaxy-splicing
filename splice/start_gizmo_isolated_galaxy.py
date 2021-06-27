@@ -1,3 +1,5 @@
+# this script schedules a GIZMO job to simulate a galaxy in isolation
+# we do this to ensure structural stability before splicing galaxies together
 
 import os
 import sys
@@ -20,9 +22,35 @@ template_slurm_script = """#!/bin/bash
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=dm1@student.ubc.ca
 echo Time: $(date)
-echo "Starting makegalaxy for {0}. The job ID is $SLURM_JOBID."
-echo $SLURM_JOBID >> job_ids
+echo "Starting GIZMO for {0}. The job ID is $SLURM_JOBID."
+echo $SLURM_JOBID >> ../job_ids
 {1} {0}.param
+echo "GIZMO finished. Plotting the star formation rate."
+module load scipy-stack
+python sfr.py
+echo "Done!"
+
+"""
+
+template_sfr_py = """
+import pandas
+import matplotlib.pyplot as plt
+
+code_mass_units_in_Msun = 1e10
+code_time_units_in_Myr = 978.028
+
+df = pandas.read_csv('sfr.txt', sep=' ', names=('t', 'expected', 'SFR', 'M* per step', 'M* this step'))
+
+df['t'] = df['t'] * code_time_units_in_Myr
+df['SFR'] = df['SFR'] * code_mass_units_in_Msun / (code_time_units_in_Myr * 1e6)
+
+fig = plt.figure()
+ax = plt.axes()
+df.plot('t', 'SFR', ax=ax)
+ax.set_xlabel('Time [Myr]')
+ax.set_ylabel('SFR [M☉/yr]')
+ax.set_title('Star formation rate for {0}')
+fig.savefig('{0}.sfr.pdf')
 
 """
 
@@ -55,8 +83,8 @@ NumFilesWrittenInParallel   1  % must be < N_processors & power of 2
 
 %---- Output frequency 
 TimeOfFirstSnapshot     0.0
-TimeBetSnapshot         0.01 
-TimeBetStatistics       0.01 
+TimeBetSnapshot         0.002 
+TimeBetStatistics       0.002 
 
 %---- CPU-time limits 
 TimeLimitCPU            {2}   %  259200  % in seconds 
@@ -71,7 +99,7 @@ BufferSize          100      % in MByte
 
 %---- Characteristics of run 
 TimeBegin   0.0    % Beginning of the simulation 
-TimeMax     0.25   % End of the simulation 
+TimeMax     0.2    % End of the simulation 
 
 %---- Cosmological parameters 
 ComovingIntegrationOn   0       % is it cosmological? (yes=1, no=0)
@@ -128,6 +156,7 @@ IsolatedSimBlackHoleStart    0.1       % start time for BH feedback, probably ~0
 IsolatedSimBlackHoleMass     0.005     % mass of one black hole particle (code units)
 IsolatedSimGasFraction       {3}       % initial gas mass fraction (gas mass / (gas mass + star mass))
 IsolatedSimMstar             {4}       % total initial stellar mass (in Msun)
+IsolatedSimHaloMass          {5}       % total initial halo mass (in Msun)
 
 %---- Star Formation parameters (GALSF on)
 CritPhysDensity     0.2    %  critical physical density for star formation (cm^(-3)) 
@@ -157,6 +186,7 @@ BlackHoleMaxAccretionRadius  2              % max radius for BH neighbor search/
 BlackHoleRadiativeEfficiency 0.1        % radiative efficiency
 BlackHoleFeedbackFactor      0.05           % generic feedback strength multiplier 
 SeedBlackHoleMass            0
+BAL_f_accretion              0.1        % fraction of gas swallowed by BH (BH_BAL_WINDS)  % !!! correct?
 BAL_v_outflow                1e4        % v_wind in km/s
 VariableWindVelFactor        5.0        % Zhu & Li 2016 Apj (MFM comparison)
 VariableWindSpecMomentum     0.
@@ -187,6 +217,7 @@ MinFoFMassForNewSeed          100
 # returns tuple of six strings:
 #       * gas fraction
 #       * total disk mass (in Msun)
+#       * total halo mass (in Msun)
 #       * suggested memory per task based on number of particles (in MB)
 #       * total memory (above times number tasks, in MB)
 #       * suggested time limit in seconds
@@ -204,8 +235,9 @@ def get_mem_time_info(mass_per_disk_particle_in_Msun, fname, p):
     # ---- gas fraction ----
     gas_fraction = '{:.8f}'.format(N_gas / (N_gas + N_disk))
 
-    # ---- total disk mass (in Msun) ----
+    # ---- total disk and halo mass (in Msun) ----
     disk_mass = '{:.9g}'.format(N_disk * mass_per_disk_particle_in_Msun)
+    halo_mass = '{:.9g}'.format(N_halo * mass_per_disk_particle_in_Msun)
 
     # ---- suggested memory per task based on number of particles (in MB) ---
     m = 300 # horizontal scaling factor
@@ -224,14 +256,14 @@ def get_mem_time_info(mass_per_disk_particle_in_Msun, fname, p):
     memory_total = '{:.0f}'.format(memory*p) # total 
 
     # ---- suggested time limit ----
-    time_limit_in_s = int(60*15 + 0.1 * x / math.sqrt(p)) # in s
+    time_limit_in_s = int(60*15 + 0.18 * x / math.sqrt(p)) # in s
     time_string = str(time_limit_in_s)
     # from https://stackoverflow.com/a/775075/13326516
     m, s = divmod(time_limit_in_s, 60)
     h, m = divmod(m, 60)
     time_hms = '{:02d}:{:02d}:{:02d}'.format(h, m, s) # in hh:mm:ss form
 
-    return (gas_fraction, disk_mass, memory_string, memory_total, time_string, time_hms)
+    return (gas_fraction, disk_mass, halo_mass, memory_string, memory_total, time_string, time_hms)
 
 
 
@@ -260,15 +292,19 @@ for fname in (os.path.splitext(os.path.basename(s))[0] for s in sys.argv[1:]):
         os.system('ln -s ~/gizmo-files/* ./') # create symlinks to other GIZMO files that are needed
 
         # extract data from .hdf5 file
-        gas_fraction, disk_mass, memory, memory_total, time_limit_in_s, time_hms = get_mem_time_info(1e7, hdf5_path, n_tasks)
+        gas_fraction, disk_mass, halo_mass, memory, memory_total, time_limit_in_s, time_hms = get_mem_time_info(1e7, hdf5_path, n_tasks)
 
         # create the GIZMO job batch script
         with open(fname + '.gizmojob.sh', 'w') as f:
             f.write(template_slurm_script.format(fname, exec_path, memory_total, time_hms, n_tasks))
 
+        # create sfr.py script to plot star formation rate
+        with open('sfr.py', 'w') as f:
+            f.write(template_sfr_py.format(fname))
+
         # create the GIZMO parameter file
         with open(fname + '.param', 'w') as f:
-            f.write(template_param_file.format(fname, memory, time_limit_in_s, gas_fraction, disk_mass))
+            f.write(template_param_file.format(fname, memory, time_limit_in_s, gas_fraction, disk_mass, halo_mass))
 
         # schedule the job with slurm
         os.system('sbatch ' + fname + '.gizmojob.sh')  
