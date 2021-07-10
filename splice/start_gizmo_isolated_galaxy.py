@@ -24,7 +24,9 @@ template_slurm_script = """#!/bin/bash
 echo Time: $(date)
 echo "Starting GIZMO for {0}. The job ID is $SLURM_JOBID."
 echo $SLURM_JOBID >> ../job_ids
-{1} {0}.param
+module load arch/avx2 nixpkgs/16.09 StdEnv/2016.4 openmpi/2.1.1 intel/2016.4 fftw-mpi/2.1.5 grackle/3.1 gsl/2.2.1
+module list > protocluster.loaded_modules
+srun {1} {0}.param
 echo "GIZMO finished. Plotting the star formation rate."
 module load scipy-stack
 python sfr.py
