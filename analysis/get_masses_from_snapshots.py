@@ -266,10 +266,10 @@ print('Beginning computations with {} CPUs...'.format(ncpus))
 with multiprocessing.Pool(processes=ncpus) as pool:
     if t is not None:
         stars_results_tuple, formed_results_tuple, gas_results_tuple, halo_results_tuple = zip(
-            *pool.starmap(process_snapshot, zip(snaps, t)))
+            *pool.starmap(process_snapshot, zip(snaps, t), chunksize=1))
     else:
         stars_results_tuple, formed_results_tuple, gas_results_tuple, halo_results_tuple = zip(
-            *pool.map(process_snapshot, snaps))
+            *pool.map(process_snapshot, snaps, chunksize=1))
 
 # make headers for save files
 if t is not None:
