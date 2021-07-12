@@ -14,6 +14,8 @@ import os.path
 import sys
 import multiprocessing
 
+from common import locate_peak_density_3D
+
 # ---------- argument parsing
 
 parser = ArgumentParser(description='Extract masses from GIZMO snapshot files, optionally computing mass contained in radial bins')
@@ -131,57 +133,10 @@ else: # --where was specified
 
         return np.where(radii.reshape(1,-1) < R.reshape(-1,1), masses.reshape(1,-1), 0).sum(axis=1)
 
-# --- locate_peak_density_3D
-# given an Nx3 array a of coordinates, return coordinates of the location with greatest density
-#   bins into nbins^3 bins and returns float numpy.array (length three) giving coordinates for bin with most items
-#   only considers the domain (-cube_radius, cube_radius) in each of the three directions
-#   returns np.array([0, 0, 0]) if a is empty
-if not args.mmg:
-    def locate_peak_density_3D(a, cube_radius, nbins, weights=None):
-        # construct array with edges of bins (same edges for each of the three dimensions)
-        # there will be nbins^3 bins; each bin can be described by the indices for the right edge:
-        #   for example, a bin with indices 100, 20, and 31 could be said to occupy the cube with
-        #   edges[99] ≤ x < edges[100], edges[19] ≤ y < edges[20]], and edges[30] ≤ z < edges[31]
-        edges, d_edges = np.linspace(-cube_radius, cube_radius, num=(nbins+1), retstep=True)
-
-        if weights is not None:
-
-            # find which coordinates within the domain
-            include = np.all(np.absolute(a) < cube_radius, axis=1)
-
-            # find right-edge indices of non-empty bins and get which bins each coordinate belongs to
-            # unique is a Nx3 array where N is the number of bins containing at least one particle and
-            #   where unique[i,0], unique[i,1], and unique[i,2] give the x, y, and z indices for ith bin
-            # which_bin is a 1D array giving index in unique for each coordinate in a
-            unique, which_bin = np.unique(
-                np.searchsorted(edges, a[include], side='right'),
-                return_inverse=True,
-                axis=0)
-
-            # get weights in the domain
-            w = weights[include]
-            # sum the weights inside each bin
-            counts = np.fromiter((w[which_bin == i].sum() for i in range(len(unique))),
-                                 dtype='float', count=len(unique))
-
-        else:
-            # unique is a Nx3 array where N is the number of bins containing at least one particle and
-            #   where unique[i,0], unique[i,1], and unique[i,2] give the x, y, and z indices for ith bin
-            # counts is a one-dimensional array of same length as unique giving count in each bin
-            unique, counts = np.unique(
-                np.searchsorted(edges, a[np.all(np.absolute(a) < cube_radius, axis=1)], side='right'),
-                return_counts=True,
-                axis=0)
-
-        # find the indices of the first bin with maximal count
-        bin_indices_of_maximum = unique[counts.argmax()]
-        # we return the coordinates of this bin
-        return edges[bin_indices_of_maximum] - 0.5 * d_edges
-
 
 # --- recenter
 # given masses and coordinates, return coordinates shifted to center on peak brightness or most massive galaxy
-if args.mmg: # --mmg was not specified
+if args.mmg: # --mmg was specified
     particle_ids_center = np.loadtxt(os.path.join(data_dir, 'mmg_particle_ids.txt'))
     def recenter(masses, coords, disk_ids):   # this function won't currently be working as written
         if data_dir == 'SPT2349_1e6_gf0.9':
@@ -250,7 +205,6 @@ if not args.mmg: # --mmg was not specified
         else:
             centre = locate_peak_density_3D(
                 star_coords, cube_radius=75, nbins=512, weights=star_masses).reshape((1, 3))
-
         return tuple(process_snapshot_helper(m, c - centre, time) for m, c in (
                 (star_masses, star_coords),
                 (formed_stellar_masses, formed_stellar_coords),
