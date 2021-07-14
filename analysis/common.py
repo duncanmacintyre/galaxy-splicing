@@ -15,10 +15,11 @@ import numpy as np
 #
 # if return_histogram is True, returns a length-four tuple with:
 #   coordinates_of_maximum        (as above)
-#   bin_edges                     numpy array of bin edges, shape (nbins+1,)
-#   unique                        indices for right edges of non-empty bins, shape (M, 3), so
-#                                   e.g. bin_edges[unique[i,:]] gives the right edges of the
-#`                                  ith non-empty bin in the x, y, and z directions
+#   edges                         numpy array of bin edges, shape (nbins+1,)
+#   d_edges                       float with width of bins (they are evenly spaced)
+#   unique                        indices for right edges of non-empty bins, shape (M, 3)
+#                                   e.g. edges[unique[i,:]] gives the right edges of the ith
+#`                                  non-empty bin in the x, y, and z directions
 #   counts                        count or total weight inside each non-empty bin, shape (M, 3)
 #
 def locate_peak_density_3D(a, cube_radius, nbins, weights=None, return_histogram=False):
@@ -61,7 +62,7 @@ def locate_peak_density_3D(a, cube_radius, nbins, weights=None, return_histogram
 
     # we return the results
     if return_histogram:
-        return (coordinates_of_maximum, bin_edges, unique, counts)
+        return (coordinates_of_maximum, edges, d_edges, unique, counts)
     else:
         return coordinates_of_maximum
 
