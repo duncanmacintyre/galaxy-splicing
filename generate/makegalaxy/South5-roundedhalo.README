@@ -1,0 +1,5 @@
+Makegalaxy was giving errors for the file South5.txt here.
+I found that I could avoid errors by perturbing the halo mass
+by a very small amount; this resulted in South5-roundedhalo.txt.
+The perterbation is miniscule so we can use makegalaxy's result
+for South5-roundedhalo.txt as the South5 initial conditions.

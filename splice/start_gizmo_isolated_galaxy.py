@@ -6,7 +6,10 @@ import sys
 import math
 import h5py
 
-gizmo_top_dir = os.path.abspath('/scratch/{}/gizmo-galaxies-in-isolation'.format(os.getenv('USER')))
+# in this directory, we will create a simulation subdirectory for each galaxy
+gizmo_top_dir = os.path.abspath('/scratch/{}/gizmo-galaxies-in-isolation-1e6'.format(os.getenv('USER')))
+
+# how many tasks to use when simulating galaxies in isolation
 n_tasks = 4
 
 # ----- templates -----
@@ -242,24 +245,14 @@ def get_mem_time_info(mass_per_disk_particle_in_Msun, fname, p):
     halo_mass = '{:.9g}'.format(N_halo * mass_per_disk_particle_in_Msun)
 
     # ---- suggested memory per task based on number of particles (in MB) ---
-    m = 300 # horizontal scaling factor
-    M = 2000 # max possible memory value we might assign per task (in MB)
     x = N_gas + N_disk + N_halo # total number particles
-    memory = (
-                 ((M-500)/1500)
-                 * (
-                     math.log10((m*x/(p*(M-500)) + 400)/100000)
-                     / math.log10((m*x/(p*(M-500)) + 400)/100000 + 1)
-                     + 1499
-                   )
-                 + 500
-             )
+    memory = suggest_run_memory(x, p) # in MB, per task
     memory_string = '{:.0f}'.format(memory+2) # per task
     memory_total = '{:.0f}'.format(memory*p) # total 
 
     # ---- suggested time limit ----
-    time_limit_in_s = int(60*15 + 0.18 * x / math.sqrt(p)) # in s
-    time_string = str(time_limit_in_s)
+    time_limit_in_s = suggest_run_time(x, p) # in s
+    time_string = str(time_limit_in_s) # in s
     # from https://stackoverflow.com/a/775075/13326516
     m, s = divmod(time_limit_in_s, 60)
     h, m = divmod(m, 60)
@@ -268,6 +261,23 @@ def get_mem_time_info(mass_per_disk_particle_in_Msun, fname, p):
     return (gas_fraction, disk_mass, halo_mass, memory_string, memory_total, time_string, time_hms)
 
 
+# given number of particles x and number of processors p, return a suggested simulation run time in seconds
+def suggest_run_time(x, p):
+    return int(60*15 + (0.2 * x)/math.sqrt(p))
+
+# given number of particles x and number of processors p, return a suggested per-task memory limit in MB
+m = 300 # horizontal scaling factor
+M = 3500 # max possible memory value we might assign per task (in MB)
+def suggest_run_memory(x, p):
+    return (
+                 ((M-500)/1500)
+                 * (
+                     math.log10((m*x/(p*(M-500)) + 400)/100000)
+                     / math.log10((m*x/(p*(M-500)) + 400)/100000 + 1)
+                     + 1499
+                   )
+                 + 500
+        )
 
 
 # ----- beginning of script part -----
