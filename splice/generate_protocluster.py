@@ -28,7 +28,7 @@ import numpy as np
 
 double_precision = True  # use True if GIZMO expects double precision ICs, False if single precision
 do_bulge = False         # whether to include bulge particles in output (we always include disk particles)
-do_star = False          # whether to include formed star particles in output (we always include disk particles)
+do_star = True           # whether to include formed star particles in output (we always include disk particles)
 density_present = False  # whether to include the gas field Density in output
 num_metals = 11          # how many metals we track - set to 0 to ignore Metallicity fields
 r_std = 59.449           # standard deviation for galaxy distance from centre, in kpc - defines normal distribution
@@ -98,6 +98,8 @@ dtype = 'float64' if double_precision else 'float32'
 common_fields = ['Coordinates', 'Masses', 'Velocities']
 # fields for gas particles
 gas_only_fields = ['Density', 'InternalEnergy'] if density_present else ['InternalEnergy']
+# fields for star particles
+star_only_fields = ['StellarFormationTime']
 # fields for gas, star, disk, and bulge particles
 gas_stars_only_fields = ['Metallicity'] if num_metals > 1 else []
 
@@ -115,7 +117,7 @@ gas_fields = (*common_fields, *gas_only_fields, *gas_stars_only_fields, )
 dm_fields = (*common_fields, )
 disk_fields = (*common_fields, )
 bulge_fields = (*common_fields, )
-star_fields = (*common_fields, *gas_stars_only_fields, )
+star_fields = (*common_fields, *star_only_fields, *gas_stars_only_fields, )
 bh_fields = (*common_fields, )
 
 
@@ -281,6 +283,12 @@ for index, data_file in enumerate(fnames_in):
         this_star = {field:grab_property(f, 4, field) for field in star_fields} if do_star else empty_data_star
         this_bh = {field:grab_property(f, 5, field) for field in bh_fields}
 
+    # If we are using data for formed stars, we change their formation times
+    # to negative times since the simulation will start at t=0.
+    if do_star:
+        this_star['StellarFormationTime'] = (this_star['StellarFormationTime']
+                                             - 1.05 * np.max(this_star['StellarFormationTime']))
+
     Ngas[index] = len(this_gas['Coordinates'])
     Ndm[index] = len(this_dm['Coordinates'])
     Ndisk[index] = len(this_disk['Coordinates'])
@@ -432,7 +440,6 @@ new_ids = np.arange(1, tot_part + 1, 1, dtype='uint32')
 print('Generating HDF5 file.')
 with h5py.File(fname_out, 'w') as fp:
 
-    # !!! verify which properties we need - see manual
     # set header properties
     header = fp.create_group('Header')
     header.attrs['MassTable'] = np.zeros(6);
