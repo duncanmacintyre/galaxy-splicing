@@ -98,15 +98,27 @@ def plot_sfr(t, sfr, snapshot_path, snapshot_time, ic_path, galaxy_name, figure_
 
 # given paths to snapshot and initial conditions: return string with how much gas lost to star formation
 def make_description_of_gas_lost(snapshot_path, ic_path):
-    N_snap, m_snap = get_amount_gas_particles(snapshot_path)
-    N_zero, m_zero = get_amount_gas_particles(ic_path)
-    return '{:d} of {:d} gas particles lost ({:.1f}%, {:.1f}% by mass)'.format(
-                N_zero-N_snap, N_zero, 100*(N_zero-N_snap)/N_zero, 100*(m_zero-m_snap)/m_zero)
+    N_snap_gas, m_snap_gas = get_amount_particles(snapshot_path, 0)
+    N_zero_gas, m_zero_gas = get_amount_particles(ic_path, 0)
+    N_snap_stars_formed, m_snap_stars_formed = get_amount_particles(snapshot_path, 4)
+    N_zero_disk, m_zero_disk = get_amount_particles(ic_path, 2)
+    return '{:d} of {:d} gas particles lost ({:.1f}%, {:.1f}% by mass)\ngas fraction: was {:.2f}, now {:.2f}\ngas mass: was {:.2g}, now {:.2g}'.format(
+                N_zero_gas-N_snap_gas, N_zero_gas, 100*(N_zero_gas-N_snap_gas)/N_zero_gas, 100*(m_zero_gas-m_snap_gas)/m_zero_gas,
+                m_zero_gas/(m_zero_gas+m_zero_disk), m_snap_gas/(m_snap_gas+m_snap_stars_formed+m_zero_disk),
+                m_zero_gas, m_snap_gas)
 
-# given path to snapshot, return its number of gas particles and total gas mass in code units
-def get_amount_gas_particles(snapshot_path):
+# given h5py.File f, return values for a part type and field or an empty array if not present
+def grab_property(f, part_type, field):
+    try:
+        prop = np.asarray(f['/PartType%d/%s' % (part_type, field)])
+    except KeyError:
+        prop = np.empty((0,))
+    return prop
+
+# given path to snapshot and a part_type, return its number of particles and total mass in code units
+def get_amount_particles(snapshot_path, part_type):
     with h5py.File(snapshot_path) as f:
-        masses = f['/PartType0/Masses']
+        masses = grab_property(f, part_type, 'Masses')
         return (len(masses), np.sum(masses))
 
 # given non-negative int of snapshot number, return filename of its HDF5 file (with extension, without full path)
