@@ -7,10 +7,10 @@
 #   3. Plots the star formation rate, with an arrow indicating the chosen snapshot, and stats; and
 #   4. Saves a PDF of this plot to the output directory.
 #
-# *strategy: we choose first snapshot satisfying either
-#          (1) less than 10% change in SFR over subsequent 10 Myr and less than 3.33% change in
-#              SFR over subsequent 5 Myr, or
-#          (2) SFR remains below 2% of the total peak value for subsequent 10 Myr
+# *strategy: We choose the first snapshot satisfying either
+#          (1) SFR remains below 1% of the global maximum for the 30 Myr after the snapshot.
+#    or    (2) Over subsequent 10 Myr, SFR max/min < 10%; over subsequent 15 Myr, SFR max/min < 20%;
+#              and over subsequent 45 Myr, SFR max/min < 55%.
 #
 
 import sys
@@ -37,14 +37,6 @@ time_snapshot_zero = 0 # time of snapshot 0 in code units
 
 out_dir = 'chosen' # directory to save chosen .hdf5 files and SFR plots in
 
-# strategy: we choose first snapshot satisfying either
-# (1) less than 3.33% and 10% change in SFR over subsequent 5 Myr and 10 Myr respectively, or
-# (2) SFR is less than 2% of the peak value for subsequent 10 Myr
-# interval = 10 # size of interval in which we consider change, in Myr
-cutoff = 0.1 # fractional change must be less than this amount
-frac_accepted_below = 0.02
-# SFR must change less than cutoff over interval and less than cutoff/3 over interval/2,
-# or must be less than frac_accepted_below for at least interval
 
 # ----- functions -----
 
@@ -102,7 +94,7 @@ def make_description_of_gas_lost(snapshot_path, ic_path):
     N_zero_gas, m_zero_gas = get_amount_particles(ic_path, 0)
     N_snap_stars_formed, m_snap_stars_formed = get_amount_particles(snapshot_path, 4)
     N_zero_disk, m_zero_disk = get_amount_particles(ic_path, 2)
-    return '{:d} of {:d} gas particles lost ({:.1f}%, {:.1f}% by mass)\ngas fraction: was {:.2f}, now {:.2f}\ngas mass: was {:.2g}, now {:.2g}'.format(
+    return '{:d} of {:d} gas particles lost ({:.1f}%, {:.1f}% by mass)\ngas fraction: was {:.2f}, now {:.2f}\ngas mass: was {:.3g}, now {:.3g} M☉'.format(
                 N_zero_gas-N_snap_gas, N_zero_gas, 100*(N_zero_gas-N_snap_gas)/N_zero_gas, 100*(m_zero_gas-m_snap_gas)/m_zero_gas,
                 m_zero_gas/(m_zero_gas+m_zero_disk), m_snap_gas/(m_snap_gas+m_snap_stars_formed+m_zero_disk),
                 m_zero_gas, m_snap_gas)
@@ -115,11 +107,11 @@ def grab_property(f, part_type, field):
         prop = np.empty((0,))
     return prop
 
-# given path to snapshot and a part_type, return its number of particles and total mass in code units
+# given path to snapshot, return the number of particles and total mass (in Msun) for a certain part_type
 def get_amount_particles(snapshot_path, part_type):
     with h5py.File(snapshot_path) as f:
         masses = grab_property(f, part_type, 'Masses')
-        return (len(masses), np.sum(masses))
+        return (len(masses), np.sum(masses)*code_mass_units_in_Msun)
 
 # given non-negative int of snapshot number, return filename of its HDF5 file (with extension, without full path)
 def get_snap_filename(n):
@@ -132,21 +124,22 @@ def get_snap_path(n, snap_dir):
     return os.path.join(snap_dir, get_snap_filename(n))
 
 # given time and SFR arrays in Myr and Msun/yr, return number for the snapshot we should choose for initial conditions
+#
+# strategy: We choose the first snapshot satisfying either
+#          (1) SFR remains below 1% of the global maximum for the 30 Myr after the snapshot; or
+#          (2) over subsequent 10 Myr, SFR max/min < 10%, over subsequent 15 Myr, SFR max/min < 20%,
+#              and over subsequent 45 Myr, SFR max/min < 55%.
+#
 def choose_snap(t, sfr):
     # find time when galaxy is considered "stable" as per our strategy
     # see also https://stackoverflow.com/a/8534381/13326516
-    accept_below = frac_accepted_below*np.max(sfr)
-    interval = np.max(t)/20
+    accept_below = 0.01*np.max(sfr)
     chosen_time = next(
-            (this_t for this_t, this_sfr in zip(t, sfr) if
-                within_cutoff(sfr[(t > this_t) & (t < this_t+interval) & (sfr != 0)],
-                              this_sfr, cutoff, accept_below)
-                and within_cutoff(sfr[(t > this_t) & (t < this_t+interval/2) & (sfr != 0)],
-                                  this_sfr, cutoff/3, accept_below)
-                and within_cutoff(sfr[(t > this_t) & (t < this_t+interval*3) & (sfr != 0)],
-                                  this_sfr, cutoff*2, accept_below)
-                and within_cutoff(sfr[(t > this_t) & (t < this_t+interval*4) & (sfr != 0)],
-                                  this_sfr, cutoff*3.5, accept_below)),
+            (this_t for this_t in t if
+                np.all(np.abs(sfr[(t > this_t) & (t < this_t+30)]) < accept_below)
+                or (within_cutoff(0.1, sfr[(t > this_t) & (t < this_t+10) & (sfr != 0)])
+                    and within_cutoff(0.2, sfr[(t > this_t) & (t < this_t+15) & (sfr != 0)])
+                    and within_cutoff(0.55, sfr[(t > this_t) & (t < this_t+45) & (sfr != 0)]))),
             None) # default: will be None if condition never reached
     if chosen_time is not None: # if we found a time, make sure it is not later than last snapshot
         chosen_time = min(chosen_time, t[-1] - time_between_snaps*code_time_units_in_Myr)
@@ -158,14 +151,9 @@ def choose_snap(t, sfr):
 # number is by looking at what files exist.
 # Practically, this doesn't matter much because we expect to choose a time long before the last snapshot.
 
-# return True if either
-#  (1) test_val>0, len(x)>0, and all values of x within cutoff fraction of test_val, or
-#  (2) test_val>0, len(x)>0, and all values of x have magnitude less than accept_below;
-# otherwise return False
-def within_cutoff(x, test_val, cutoff, accept_below=0):
-    return (test_val > 0 and len(x) > 0
-            and (np.all(x/test_val < (1 + cutoff)) and np.all(x/test_val > 1/(1 + cutoff)))
-                or np.all(np.abs(x) < accept_below))
+# return True if x has at least two elements and max(x)/min(x) < cutoff+1; otherwise return False
+def within_cutoff(cutoff, x):
+    return (len(x)>1) and ((np.max(x)/np.min(x)-1)<cutoff)
 
 # given path to galaxy sim directory, choose snapshot, plot, and save output
 def process_one_sim(this_dir):
