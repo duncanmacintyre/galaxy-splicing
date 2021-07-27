@@ -105,12 +105,13 @@ gas_stars_only_fields = ['Metallicity'] if num_metals > 1 else []
 
 # how many items per field
 field_size = {
-    'Coordinates':     3,
-    'Masses':          1,
-    'Velocities':      3,
-    'Density':         1,
-    'InternalEnergy':  1,
-    'Metallicity':     num_metals
+    'Coordinates':              3,
+    'Masses':                   1,
+    'Velocities':               3,
+    'Density':                  1,
+    'InternalEnergy':           1,
+    'StellarFormationTime':     1,
+    'Metallicity':              num_metals
 }
 
 gas_fields = (*common_fields, *gas_only_fields, *gas_stars_only_fields, )
@@ -206,6 +207,7 @@ def empty_array(field):
     n = field_size[field] # how many entries per particle
     return np.empty((0,) if n==1 else (0, n))
 
+
 # return how many files inside a given directory have names ending with suffix
 def count_files_inside_with_suffix(path, suffix):
     return sum(1 for _ in filter(lambda s: s.endswith(suffix), os.listdir(path)))
@@ -285,7 +287,7 @@ for index, data_file in enumerate(fnames_in):
 
     # If we are using data for formed stars, we change their formation times
     # to negative times since the simulation will start at t=0.
-    if do_star:
+    if do_star and len(this_star['StellarFormationTime']) > 0:
         this_star['StellarFormationTime'] = (this_star['StellarFormationTime']
                                              - 1.05 * np.max(this_star['StellarFormationTime']))
 
