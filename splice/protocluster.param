@@ -23,7 +23,7 @@ TimeBetStatistics       0.05
 TimeLimitCPU            {cpu_time_limit}  % in seconds 
 CpuTimeBetRestartFile   4000              % in seconds 
 ResubmitOn              0 
-ResubmitCommand         sbatch /path/to/resubmit/job/script
+ResubmitCommand         restart.sh
 
 %----- Memory alloction 
 MaxMemSize          4000    % sets maximum MPI memory use per process in MByte 
@@ -123,4 +123,14 @@ IsolatedSimHaloMass          {halo_mass}       % total initial halo mass (in Msu
 % stellar feedback is stronger for smaller values IsolatedSimHaloMass
 
 %-------------- Grackle UVB file (GRACKLE on)
-GrackleDataFile              cloudy/CloudyData_UVB=FG2011.h5
+GrackleDataFile              CloudyData_UVB=HM2012_shielded.h5
+
+%-------------- These parameters shouldn't be necessary but GIZMO complains if they're missing :(
+SofteningHaloMaxPhys         0.1
+SofteningDiskMaxPhys         0.1
+SofteningBulgeMaxPhys        0.1
+SofteningGasMaxPhys          0.1
+SofteningStarsMaxPhys        0.1
+SofteningBndryMaxPhys        0.1
+TimeBetOnTheFlyFoF           1e12
+MinFoFMassForNewSeed         1e12
