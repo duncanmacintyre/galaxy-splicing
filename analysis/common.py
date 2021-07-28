@@ -14,7 +14,9 @@ def code_time_to_Myr(t):
     return 978.028*t
 
 
-# --- locate_peak_density_3D
+# --- locate_peak_density_3D and locate_peak_density_3D_and_plot
+# for finding peak density in three dimensions and plotting 2D histograms with it
+
 # given an Nx3 array a of coordinates, return coordinates of the location with greatest density
 #   Bins coordinates into nbins^3 bins and finds bin with greatest count or total weighting.
 #   Only considers the domain (-cube_radius, cube_radius) in each of the three directions.
@@ -78,20 +80,17 @@ def locate_peak_density_3D(a, cube_radius, nbins, weights=None, return_histogram
         return coordinates_of_maximum
 
 
-# --- locate_peak_density_3D_and_plot
 # same as locate_peak_density_3D, but also plot 2D histogram(s) showing the result
 #   axes            an Axes to plot on or an iterable of Axes
 #   squish_along    0, 1, or 2 to plot looking along x, y, or z direction; or iterable of these
 #   rasterized      True or False; whether plotted histogram is raster image instead of vector
-#   nticks         how many tick marks to use along each axis
+#   nticks          how many tick marks to use along each axis
 #   mark_maximum    True or False; whether to plot a green plus showing location of peak density
-#   mark_cm         True or False; whether to plot a red dot showing "centre of mass"
 #
 # Others as for locate_peak_density_3D. axes and squish_along should be same length if iterables.
 #
 def locate_peak_density_3D_and_plot(a, cube_radius, nbins, axes,
-                                    squish_along=2, rasterized=True, nticks=7, 
-                                    mark_maximum=True, mark_cm=True,
+                                    squish_along=2, rasterized=True, nticks=7, mark_maximum=True, 
                                     weights=None, return_histogram=False):
     # compute the histogram, find the peak
     hist_results = locate_peak_density_3D(a, cube_radius, nbins,
@@ -103,11 +102,11 @@ def locate_peak_density_3D_and_plot(a, cube_radius, nbins, axes,
         # case: iterable
         for a, sa in zip(axes, squish_along):
             _plot_results_of_locate_peak_density_3D(
-                a, sa, hist_results, rasterized, mark_maximum, mark_cm, nticks)
+                a, sa, hist_results, rasterized, mark_maximum, nticks)
     else:
         # case: just an Axes
         _plot_results_of_locate_peak_density_3D(
-            axes, squish_along, hist_results, rasterized, mark_maximum, mark_cm, nticks)
+            axes, squish_along, hist_results, rasterized, mark_maximum, nticks)
 
     # return same output as locate_peak_density_3D would
     if return_histogram:
@@ -121,13 +120,12 @@ def locate_peak_density_3D_and_plot(a, cube_radius, nbins, axes,
 #   hist_results is a tuple of output from locate_peak_density_3D for return_histogram=True
 #   rasterized is True or False; whether plotted histogram is raster image instead of vector
 #   mark_maximum is True or False; whether to indicate the peak weight density with a marker
-#   mark_cm is True or False; whether to indicate the "centre of mass" with a marker
 #   nticks is how many tick marks to use along each axis
 # doesn't return anything
 cmap = copy.copy(get_cmap('plasma')) # colormap to use
 cmap.set_bad(color = 'w') # changes cmap to use white background
 def _plot_results_of_locate_peak_density_3D(ax, squish_along, hist_results,
-                                            rasterized, mark_maximum, mark_cm, nticks):
+                                            rasterized, mark_maximum, nticks):
     # extract histogram output into variables
     coordinates_of_maximum, edges, _, unique, counts = hist_results
     nbins = len(edges) - 1 # how many bins along each direction
@@ -156,11 +154,44 @@ def _plot_results_of_locate_peak_density_3D(ax, squish_along, hist_results,
     if mark_maximum:
         ax.scatter(coordinates_of_maximum[keep_axis[0]], coordinates_of_maximum[keep_axis[1]],
                    c='chartreuse', s=10, linewidths=0.5, marker='+')
-    if mark_cm:
-        cm = np.sum(coords*weights.reshape((-1,1)), axis=1)/np.sum(weights)
-        ax.scatter(cm[keep_axis[0]], cm[keep_axis[1]],
-                   c='red', s=6, linewidths=0.5, marker='.')
+    #if mark_cm:
+    #    cm = np.sum(coords*weights.reshape((-1,1)), axis=1)/np.sum(weights)
+    #    ax.scatter(cm[keep_axis[0]], cm[keep_axis[1]],
+    #               c='red', s=6, linewidths=0.5, marker='.')
     ticks = np.linspace(edges[0], edges[-1], nticks)
     ax.set_xticks(ticks)
     ax.set_yticks(ticks)
+
+
+# ----- grab_property and empty_array
+# for loading .hdf5 files (e.g. GIZMO snapshots)
+
+default_num_metals = 11    # default number of metals
+field_size = {    # how many items per field
+    'Coordinates':              3,
+    'Masses':                   1,
+    'Velocities':               3,
+    'Density':                  1,
+    'InternalEnergy':           1,
+    'StellarFormationTime':     1,
+    'Metallicity':              default_num_metals
+}
+
+# given h5py.File f, return values for a part type and field, or an empty array if not present
+def grab_property(f, part_type, field, num_metals=None):
+    try:
+        return np.asarray(f['/PartType%d/%s' % (part_type, field)])
+    except KeyError:
+        return empty_array(field)
+
+# return empty numpy array of suitable size for given field
+def empty_array(field, num_metals=None):
+    if (num_metals is None) or (field!='Metallicity'): # most of time
+        n = field_size[field] # how many entries per particle
+    else: # we need to use the custom number of metals that was given
+        n = num_metals
+    return np.empty((0,) if n==1 else (0, n))
+
+
+
 

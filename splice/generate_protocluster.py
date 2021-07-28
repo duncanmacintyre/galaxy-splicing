@@ -23,6 +23,11 @@ import pickle
 import argparse
 import h5py
 import numpy as np
+from pandas import DataFrame
+import matplotlib.pyplot as plt
+
+from common import grab_property, empty_array, default_num_metals, locate_peak_density_3D_and_plot
+from generate_protocluster_functions import *
 
 # ----- constants -----
 
@@ -30,13 +35,8 @@ double_precision = True  # use True if GIZMO expects double precision ICs, False
 do_bulge = False         # whether to include bulge particles in output (we always include disk particles)
 do_star = True           # whether to include formed star particles in output (we always include disk particles)
 density_present = False  # whether to include the gas field Density in output
-num_metals = 11          # how many metals we track - set to 0 to ignore Metallicity fields
-r_std = 59.449           # standard deviation for galaxy distance from centre, in kpc - defines normal distribution
-r_maximum = 138.88       # maximum allowed galaxy distance from centre, in kpc
-v_std = 571.83           # standard deviation for galaxy speeds, in km/s - defines normal distribution
-v_maximum = 1681.9       # maximum allowed galaxy speed, in km/s
 
-# these values for r_std, r_maximum, v_std, and v_maximum are
+# these values for r_maximum, v_std, and v_maximum are
 # derived in the file ../generate/position_velocity_distribution.ipynb
 
 # ----- setup -----
@@ -101,18 +101,7 @@ gas_only_fields = ['Density', 'InternalEnergy'] if density_present else ['Intern
 # fields for star particles
 star_only_fields = ['StellarFormationTime']
 # fields for gas, star, disk, and bulge particles
-gas_stars_only_fields = ['Metallicity'] if num_metals > 1 else []
-
-# how many items per field
-field_size = {
-    'Coordinates':              3,
-    'Masses':                   1,
-    'Velocities':               3,
-    'Density':                  1,
-    'InternalEnergy':           1,
-    'StellarFormationTime':     1,
-    'Metallicity':              num_metals
-}
+gas_stars_only_fields = ['Metallicity'] if default_num_metals > 1 else []
 
 gas_fields = (*common_fields, *gas_only_fields, *gas_stars_only_fields, )
 dm_fields = (*common_fields, )
@@ -123,115 +112,38 @@ bh_fields = (*common_fields, )
 
 
 # ----- functions -----
+# additional functions defined in generate_protocluster_functions.py
 
-def rand_rotation_matrix(deflection = 1.0, randnums = None):
-    """
-    Creates a random rotation matrix.
-    
-    deflection: the magnitude of the rotation. For 0, no rotation; for 1, 
-    competely random rotation. Small deflection => small perturbation.
-    randnums: 3 random numbers in the range [0, 1]. If `None`, 
-    they will be auto-generated.
-    """
-    # from http://www.realtimerendering.com/resources/GraphicsGems/
-    #gemsiii/rand_rotation.c
-    
-    if randnums is None:
-        randnums = random_gen.uniform(size = (3,))
-        
-    theta, phi, z = randnums
-    
-    theta = theta * 2.0 * deflection * np.pi  # Rotation about the pole (Z).
-    phi = phi * 2.0 * np.pi  # For direction of pole deflection.
-    z = z * 2.0 * deflection  # For magnitude of pole deflection.
-    
-    # Compute a vector V used for distributing points over the sphere
-    # via the reflection I - V Transpose(V).  This formulation of V
-    # will guarantee that if x[1] and x[2] are uniformly distributed,
-    # the reflected points will be uniform on the sphere.  Note that V
-    # has length sqrt(2) to eliminate the 2 in the Householder matrix.
-    
-    r = np.sqrt(z)
-    V = (
-            np.sin(phi) * r,
-            np.cos(phi) * r,
-            np.sqrt(2.0 - z)
-        )
-    
-    st = np.sin(theta)
-    ct = np.cos(theta)
-    
-    R = np.array(((ct, st, 0), (-st, ct, 0), (0, 0, 1)))
-    
-    # Construct the rotation matrix  ( V Transpose(V) - I ) R.
-    
-    M = (np.outer(V, V) - np.eye(3)).dot(R)
-    return M
+# given a log directory, return path to where the output plot with arrows is to be saved
+def get_plot_path(log_dir):
+    return os.path.join(log_dir, os.path.basename(os.path.splitext(fname_out)[0])+'.pdf')
 
-
-# return a length-3 unit vector in a random direction (all directions equally likely)
-def rand_unit_vector():
-    phi = random_gen.uniform(0, 2.*np.pi)
-    costheta = random_gen.uniform(-1, 1)
-    sintheta = np.sin(np.arccos(costheta))
-    return np.array((sintheta * np.cos(phi), sintheta * np.sin(phi), costheta))
-
-
-# GENERATOR: sample half-normal distribution with mode at 0 and yield only values <= maximum
-def sample_half_gaussian_within_bounds(std, maximum):
-    while True:
-        mag = np.abs(random_gen.normal(0, std, 1))
-        if mag <= maximum:
-            yield mag
-
-
-# given Nx3 array, apply rotation matrix to each row then translate by vector offset
-def set_new_coords(coords_vec, rotation, translation):
-    for i, vec in enumerate(coords_vec):
-        coords_vec[i, :] = np.dot(rotation, vec)
-    return coords_vec + np.asarray(translation).reshape((1, 3))
-
-
-# given h5py.File f, return values for a part type and field or an empty array if not present
-def grab_property(f, part_type, field):
-    try:
-        prop = np.asarray(f['/PartType%d/%s' % (part_type, field)])
-    except KeyError:
-        prop = empty_array(field)
-        #print('KeyError: PartType%d/%s' % (part_type, field))
-    return prop
-
-
-# return empty numpy array of suitable size for given field
-def empty_array(field):
-    n = field_size[field] # how many entries per particle
-    return np.empty((0,) if n==1 else (0, n))
-
-
-# return how many files inside a given directory have names ending with suffix
-def count_files_inside_with_suffix(path, suffix):
-    return sum(1 for _ in filter(lambda s: s.endswith(suffix), os.listdir(path)))
-
+# given a log directory, return path to where the output plot without arrows is to be saved
+def get_plot_path_no_arrows(log_dir):
+    return os.path.join(log_dir, os.path.basename(os.path.splitext(fname_out)[0])+'_no_arrows.pdf')
 
 # given a log directory and galaxy index, return path to that galaxy's log file
 def get_log_file_path(log_dir, index):
     return os.path.join(log_dir, '{:0>3d}.pkl'.format(index))
 
-
 # given a log directory and galaxy index, return path to that galaxy's .hdf5 file (inside the log directory)
 def get_copied_data_file_path(log_dir, index):
     return os.path.join(log_dir, '{:0>3d}.hdf5'.format(index))
+
+# given a log directory, return path where we will save .txt table of galaxy masses
+def get_mass_table_path(log_dir):
+    return os.path.join(log_dir, 'masses.txt')
 
 
 # ----- script part -----
 
 # this iterator will yield distances from the centre of the protocluster for the galaxies
 # we can generate a random distance by calling next(it_r)
-it_r = sample_half_gaussian_within_bounds(r_std, r_maximum)
+it_r = sample_uniform(random_gen, b=r_maximum)
 
 # this iterator will yield speeds for the galaxies
 # we can generate a random speed by calling next(it_speed)
-it_speed = sample_half_gaussian_within_bounds(v_std, v_maximum)
+it_speed = sample_half_gaussian_within_bounds(random_gen, v_std, v_maximum)
 
 # if --load was given, file names were not specified
 # instead, we load them from the load directory (old log directory)
@@ -248,13 +160,25 @@ bulge_lists = {field:[] for field in bulge_fields}
 star_lists = {field:[] for field in star_fields}
 bh_lists = {field:[] for field in bh_fields}
 
-# these arrays will store the number of particles
-Ngas = np.zeros(len(fnames_in), dtype = 'uint32')
+# these arrays will store the number of particles for each galaxy
+Ngas = np.zeros(len(fnames_in), dtype='uint32')
 Ndm = np.copy(Ngas)
 Ndisk = np.copy(Ngas)
 Nbulge = np.copy(Ngas)
 Nstar = np.copy(Ngas)
 Nbh = np.copy(Ngas)
+
+# these arrays will store the total mass for each galaxy
+Mgas = np.zeros(len(fnames_in), dtype='float64')
+Mdm = np.copy(Mgas)
+Mdisk = np.copy(Mgas)
+Mbulge = np.copy(Mgas)
+Mstar = np.copy(Mgas)
+Mbh = np.copy(Mgas)
+
+# these arrays will store the offset coordinates and bulk velocities of the galaxies
+galaxy_coordinates = np.zeros((len(fnames_in), 3), dtype='float64')
+galaxy_velocities = np.copy(galaxy_coordinates)
 
 # these "empty" dictionaries will be used in place of bulge/star data if turned off
 if not do_bulge:
@@ -270,8 +194,9 @@ for index, data_file in enumerate(fnames_in):
     data_file = os.path.abspath(data_file)
 
     # copy/link input .hdf5 into the log directory
-    if no_copy: # --no-copy given: use symbolic link
-        os.symlink(data_file, get_copied_data_file_path(log_dir, index))
+    if no_copy: # --no-copy given: use symbolic link with a relative path
+        link_name = get_copied_data_file_path(log_dir, index)
+        os.symlink(os.path.relpath(data_file, start=os.path.basename(link_name)), link_name)
     else: # --no-copy wasn't given: copy the file
         # the copy2 function preserves metadata
         shutil.copy2(data_file, get_copied_data_file_path(log_dir, index))
@@ -297,6 +222,13 @@ for index, data_file in enumerate(fnames_in):
     Nbulge[index] = len(this_bulge['Coordinates'])
     Nstar[index] = len(this_star['Coordinates'])
     Nbh[index] = len(this_bh['Coordinates'])
+
+    Mgas[index] = np.sum(this_gas['Masses'])
+    Mdm[index] = np.sum(this_dm['Masses'])
+    Mdisk[index] = np.sum(this_disk['Masses'])
+    Mbulge[index] = np.sum(this_bulge['Masses'])
+    Mstar[index] = np.sum(this_star['Masses'])
+    Mbh[index] = np.sum(this_bh['Masses'])
 
     # We don't use /PartTypeX/Masses if mass_table is True. In this case
     # we have to set them manually using the MassTable header data.
@@ -328,11 +260,14 @@ for index, data_file in enumerate(fnames_in):
 
     else: # if --load not given, make random position and velocity for galaxy
         # position offset of the entire galaxy 
-        rand_vec = next(it_r) * rand_unit_vector()
+        rand_vec = next(it_r) * rand_unit_vector(random_gen)
         # velocity offset for the entire galaxy
-        rand_vel_vec = next(it_speed) * rand_unit_vector()
+        rand_vel_vec = next(it_speed) * rand_unit_vector(random_gen)
         # rotation matrix that we will use to rotate the entire galaxy
-        rotation = rand_rotation_matrix()
+        rotation = rand_rotation_matrix(random_gen)
+
+    galaxy_coordinates[index,:] = rand_vec
+    galaxy_velocities[index,:] = rand_vel_vec
 
     # save random position, velocity, rotation to the log
     log_data = {'Path':                 data_file,
@@ -342,7 +277,7 @@ for index, data_file in enumerate(fnames_in):
                 'RandomPosition':       rand_vec,
                 'RandomRotationMatrix': rotation}
     with open(get_log_file_path(log_dir, index), 'wb') as lf:
-        pickle.dump(log_data, lf, protocol = pickle.HIGHEST_PROTOCOL)
+        pickle.dump(log_data, lf, protocol=pickle.HIGHEST_PROTOCOL)
 
     # adjust coordinates for new rotation and offset
     this_gas['Coordinates'] = set_new_coords(this_gas['Coordinates'], rotation, rand_vec)
@@ -394,15 +329,6 @@ assert all(len(bh[field]) == len(bh['Coordinates']) for field in bh_fields)
 if not do_bulge: assert len(bulge['Coordinates'])==0
 if not do_star: assert len(star['Coordinates'])==0
 
-# compute total mass
-tot_gas_mass = np.sum(gas['Masses'])
-tot_dm_mass = np.sum(dm['Masses'])
-tot_disk_mass = np.sum(disk['Masses'])
-tot_bulge_mass = np.sum(bulge['Masses'])
-tot_star_mass = np.sum(star['Masses'])
-tot_bh_mass = np.sum(bh['Masses'])
-tot_mass = tot_gas_mass + tot_dm_mass + tot_disk_mass + tot_bulge_mass + tot_star_mass + tot_bh_mass
-
 # compute total number of particles
 tot_Ngas = int(np.sum(Ngas))
 tot_Ndm = int(np.sum(Ndm))
@@ -412,6 +338,42 @@ tot_Nstar = int(np.sum(Nstar))
 tot_Nbh = int(np.sum(Nbh))
 tot_part = int(tot_Ngas + tot_Ndm + tot_Ndisk + tot_Nbulge + tot_Nstar + tot_Nbh)
 Npart = np.array([tot_Ngas, tot_Ndm, tot_Ndisk, tot_Nbulge, tot_Nstar, tot_Nbh], dtype='uint32')
+
+# compute total mass
+tot_Mgas = np.sum(Mgas)
+tot_Mdm = np.sum(Mdm)
+tot_Mdisk = np.sum(Mdisk)
+tot_Mbulge = np.sum(Mbulge)
+tot_Mstar = np.sum(Mstar)
+tot_Mbh = np.sum(Mbh)
+tot_mass = tot_Mgas + tot_Mdm + tot_Mdisk + tot_Mbulge + tot_Mstar + tot_Mbh
+
+# save table of galaxy masses to .txt file
+df_mass_table = DataFrame({
+        'name':tuple(os.path.basename(os.path.splitext(fname)[0]) for fname in fnames_in),
+        'M':Mgas+Mdm+Mdisk+Mbulge+Mstar+Mbh,
+        'fgas':Mgas/(Mgas+Mdisk+Mbulge+Mstar),
+        'Mgas':Mgas,
+        'Mdm':Mdm,
+        'Mdisk':Mdisk,
+        'Mbulge':Mbulge,
+        'Mstar':Mstar,
+        'Mbh':Mbh,
+        'Mstellar':Mdisk+Mbulge+Mstar
+    })
+df_mass_table.append({
+        'name':'total',
+        'M':tot_mass,
+        'fgas':tot_Mgas/(tot_Mgas+tot_Mdisk+tot_Mbulge+tot_Mstar),
+        'Mgas':tot_Mgas,
+        'Mdm':tot_Mdm,
+        'Mdisk':tot_Mdisk,
+        'Mbulge':tot_Mbulge,
+        'Mstar':tot_Mstar,
+        'Mbh':tot_Mbh,
+        'Mstellar':tot_Mdisk+tot_Mbulge+tot_Mstar
+    }, ignore_index=True)
+df_mass_table.to_string(get_mass_table_path(log_dir), float_format='{:>15.7g}'.format)
 
 # We need to remove the bulk velocity of the system. This is important so that
 # the group of galaxies doesn't fly away rapidly.
@@ -426,13 +388,117 @@ mw_bv = np.sum(bulge['Masses'].reshape((-1, 1)) * bulge['Velocities'], axis=0)
 mw_sv = np.sum(star['Masses'].reshape((-1, 1)) * star['Velocities'], axis=0)
 mw_bhv = np.sum(bh['Masses'].reshape((-1, 1)) * bh['Velocities'], axis=0)
 bv = ((mw_gv + mw_dmv + mw_dv + mw_bv + mw_sv + mw_bhv) / tot_mass).reshape((1, 3))
-print('Bulk velocity: {}'.format(bv))
+print('Bulk velocity was: {}'.format(bv))
 gas['Velocities'] -= bv
 dm['Velocities'] -= bv
 disk['Velocities'] -= bv
 bulge['Velocities'] -= bv
 star['Velocities'] -= bv
 bh['Velocities'] -= bv
+galaxy_velocities -= bv
+
+# similarly, change coordinates so that the centre of mass is at (0, 0, 0)
+print('Correcting for centre of mass.')
+mw_gv = np.sum(gas['Masses'].reshape((-1, 1)) * gas['Coordinates'], axis=0)
+mw_dmv = np.sum(dm['Masses'].reshape((-1, 1)) * dm['Coordinates'], axis=0)
+mw_dv = np.sum(disk['Masses'].reshape((-1, 1)) * disk['Coordinates'], axis=0)
+mw_bv = np.sum(bulge['Masses'].reshape((-1, 1)) * bulge['Coordinates'], axis=0)
+mw_sv = np.sum(star['Masses'].reshape((-1, 1)) * star['Coordinates'], axis=0)
+mw_bhv = np.sum(bh['Masses'].reshape((-1, 1)) * bh['Coordinates'], axis=0)
+cm = ((mw_gv + mw_dmv + mw_dv + mw_bv + mw_sv + mw_bhv) / tot_mass).reshape((1, 3))
+print('Centre of mass was: {}'.format(cm))
+gas['Coordinates'] -= cm
+dm['Coordinates'] -= cm
+disk['Coordinates'] -= cm
+bulge['Coordinates'] -= cm
+star['Coordinates'] -= cm
+bh['Coordinates'] -= cm
+galaxy_coordinates -= cm
+
+# plot the positions and velocities in 2D histograms with arrows
+print('Plotting.')
+fig, ax = plt.subplots(2, 3, figsize=(11, 8.5), dpi=600, constrained_layout=True)
+fig2, ax2 = plt.subplots(2, 3, figsize=(11, 8.5), dpi=600, constrained_layout=True)
+title = os.path.basename(os.path.splitext(fname_out)[0])
+fig.suptitle(title, y=0.97, size='xx-large')
+fig2.suptitle(title, y=0.97, size='xx-large')
+# fig ====> will have arrows for velocities, galaxy labels      fig2 ====> won't have arrows, labels
+stellar_coords = np.concatenate(
+    (disk['Coordinates'], bulge['Coordinates'], star['Coordinates']),
+    axis=0)
+stellar_masses = np.concatenate(
+    (disk['Masses'], bulge['Masses'], star['Masses']),
+    axis=0)
+stellar_velocities = np.concatenate(
+    (disk['Velocities'], bulge['Velocities'], star['Velocities']),
+    axis=0)
+ax[0,0].set_xlabel('x [kpc]')
+ax[0,0].set_ylabel('z [kpc]')
+ax[1,0].set_xlabel('x [kpc]')
+ax[1,0].set_ylabel('z [kpc]')
+ax[0,1].set_xlabel('x [kpc]')
+ax[0,1].set_ylabel('y [kpc]')
+ax[1,1].set_xlabel('x [kpc]')
+ax[1,1].set_ylabel('y [kpc]')
+ax[0,2].set_xlabel('y [kpc]')
+ax[0,2].set_ylabel('z [kpc]')
+ax[1,2].set_xlabel('y [kpc]')
+ax[1,2].set_ylabel('z [kpc]')
+ax2[0,0].set_xlabel('x [kpc]')
+ax2[0,0].set_ylabel('z [kpc]')
+ax2[1,0].set_xlabel('x [kpc]')
+ax2[1,0].set_ylabel('z [kpc]')
+ax2[0,1].set_xlabel('x [kpc]')
+ax2[0,1].set_ylabel('y [kpc]')
+ax2[1,1].set_xlabel('x [kpc]')
+ax2[1,1].set_ylabel('y [kpc]')
+ax2[0,2].set_xlabel('y [kpc]')
+ax2[0,2].set_ylabel('z [kpc]')
+ax2[1,2].set_xlabel('y [kpc]')
+ax2[1,2].set_ylabel('z [kpc]')
+# plot 95 kpc circles for reference
+angle = np.linspace(0, 2*np.pi, num=1000)
+for r in [95]:
+    for a in (*ax[1,:], *ax2[1,:]):
+        a.plot(r*np.cos(angle), r*np.sin(angle), color='grey', linestyle=':')
+        a.annotate(str(r) + ' kpc', np.array((-1,1))*np.sqrt(0.5)*(r+5), c='grey', rotation=45,
+                   horizontalalignment='center', verticalalignment='center', size=9)
+# plot zoomed in plots in the top row of subplots
+locate_peak_density_3D_and_plot(stellar_coords, cube_radius=75, axes=(*ax[0,:], *ax2[0,:]),
+                                nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=7, 
+                                mark_maximum=True, weights=stellar_masses, return_histogram=False)
+# plot wider-field plots in the bottom row of subplots
+locate_peak_density_3D_and_plot(stellar_coords, cube_radius=110, axes=(*ax[1,:], *ax2[1,:]),
+                                nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=6,
+                                mark_maximum=True, weights=stellar_masses, return_histogram=False)
+# for each galaxy, plot an arrow on each axis to show the velocity
+arrow_length = 20./np.max(galaxy_velocities) # how long in kpc should velocity arrows be, per km/s
+# arrow properties
+ap = {'width':0.05, 'headwidth':0.4, 'headlength':0.4,
+      'shrink':0, 'color':'chartreuse', 'alpha':0.7} 
+for coord, vel, fname in zip(galaxy_coordinates, galaxy_velocities, fnames_in):
+    label = os.path.basename(os.path.splitext(fname)[0])
+    ax[0,0].annotate('', xy=coord[[0,2]]+arrow_length*vel[[0,2]],xytext=coord[[0,2]], arrowprops=ap)
+    ax[1,0].annotate('', xy=coord[[0,2]]+arrow_length*vel[[0,2]],xytext=coord[[0,2]], arrowprops=ap)
+    ax[0,1].annotate('', xy=coord[[0,1]]+arrow_length*vel[[0,1]],xytext=coord[[0,1]], arrowprops=ap)
+    ax[1,1].annotate('', xy=coord[[0,1]]+arrow_length*vel[[0,1]],xytext=coord[[0,1]], arrowprops=ap)
+    ax[0,2].annotate('', xy=coord[[1,2]]+arrow_length*vel[[1,2]],xytext=coord[[1,2]], arrowprops=ap)
+    ax[1,2].annotate('', xy=coord[[1,2]]+arrow_length*vel[[1,2]],xytext=coord[[1,2]], arrowprops=ap)
+    ax[0,0].annotate(label, xy=coord[[0,2]], fontsize=8)
+    ax[1,0].annotate(label, xy=coord[[0,2]], fontsize=8)
+    ax[0,1].annotate(label, xy=coord[[0,1]], fontsize=8)
+    ax[1,1].annotate(label, xy=coord[[0,1]], fontsize=8)
+    ax[0,2].annotate(label, xy=coord[[1,2]], fontsize=8)
+    ax[1,2].annotate(label, xy=coord[[1,2]], fontsize=8)
+# save figure to file
+print('Saving plots.')
+fig.savefig(get_plot_path(log_dir))
+fig2.savefig(get_plot_path_no_arrows(log_dir))
+# delete the figure to free up memory
+fig.clf()
+fig2.clf()
+plt.close(fig)
+plt.close(fig2)
 
 # generate new particle IDs, starting at 1
 new_ids = np.arange(1, tot_part + 1, 1, dtype='uint32')
