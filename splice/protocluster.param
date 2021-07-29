@@ -23,7 +23,7 @@ TimeBetStatistics       0.05
 TimeLimitCPU            {cpu_time_limit}  % in seconds 
 CpuTimeBetRestartFile   4000              % in seconds 
 ResubmitOn              0 
-ResubmitCommand         restart.sh
+ResubmitCommand         ./resubmit.sh
 
 %----- Memory alloction 
 MaxMemSize          4000    % sets maximum MPI memory use per process in MByte 
