@@ -1,5 +1,5 @@
 %----  Relevant files
-InitCondFile  {ic_path}
+InitCondFile  {ic_file_name}
 OutputDir     ./
 
 %---- File formats 
@@ -20,15 +20,15 @@ TimeBetSnapshot         0.005
 TimeBetStatistics       0.05 
 
 %---- CPU-time limits 
-TimeLimitCPU            {cpu_time_limit}  % in seconds 
+TimeLimitCPU            {timelim_in_s}    % in seconds 
 CpuTimeBetRestartFile   4000              % in seconds 
-ResubmitOn              0 
+ResubmitOn              {resubmit_on}
 ResubmitCommand         ./resubmit.sh
 
 %----- Memory alloction 
-MaxMemSize          4000    % sets maximum MPI memory use per process in MByte 
-PartAllocFactor     4.0     % memory load allowed for better cpu balance 
-BufferSize          350     % in MByte
+MaxMemSize          {memory_per_task}    % sets maximum MPI memory use per process in MByte 
+PartAllocFactor     4.0                  % memory load allowed for better cpu balance 
+BufferSize          350                  % in MByte
 
 %---- Characteristics of run 
 TimeBegin   0.0               % beginning of the simulation 
