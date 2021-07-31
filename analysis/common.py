@@ -8,11 +8,16 @@ from matplotlib.cm import get_cmap
 from matplotlib.colors import LogNorm
 
 
-# --- code_time_to_Myr
+# --- code_time_to_Myr and code_mass_to_Msun
+# for unit conversion
+
 # given time in code units, return time in Myr
 def code_time_to_Myr(t):
     return 978.028*t
 
+# given mass in code units, return mass in M☉
+def code_mass_to_Msun(m):
+    return 1.e10 * m
 
 # --- locate_peak_density_3D and locate_peak_density_3D_and_plot
 # for finding peak density in three dimensions and plotting 2D histograms with it
