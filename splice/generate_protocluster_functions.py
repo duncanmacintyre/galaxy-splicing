@@ -1,6 +1,7 @@
 # These functions are used in generate_protocluster.py. The reason for keeping 
 # these in a seperate file is so that they can easily be imported for testing.
 
+from os import listdir
 import numpy as np
 
 ##### CONSTANTS #####
@@ -91,7 +92,7 @@ def set_new_coords(coords_vec, rotation, translation):
 
 # return how many files inside a given directory have names ending with suffix
 def count_files_inside_with_suffix(path, suffix):
-    return sum(1 for _ in filter(lambda s: s.endswith(suffix), os.listdir(path)))
+    return sum(1 for _ in filter(lambda s: s.endswith(suffix), listdir(path)))
 
 
 
