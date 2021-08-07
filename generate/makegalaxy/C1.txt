@@ -15,12 +15,12 @@ UseQrng				0
 WriteDensity				0
 JD				0.1302032396840631
 H				0
-DiskHeight				0.1
+DiskHeight				0.5
 RadialDispersionFactor				1.0
 DiskPopMode				exponential
 DiskPopAge				13.9
 DiskPopTau				-106.0
-GasFraction				0.7
+GasFraction				0.6999999957474791
 MaxGasDiskHeight				2.0
 GasDistribution				0
 GasExpAlpha				1.0

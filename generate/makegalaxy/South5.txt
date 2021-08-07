@@ -15,7 +15,7 @@ UseQrng				0
 WriteDensity				0
 JD				0.13020378015578782
 H				0
-DiskHeight				0.1
+DiskHeight				0.5
 RadialDispersionFactor				1.0
 DiskPopMode				exponential
 DiskPopAge				13.9

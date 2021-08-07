@@ -1,10 +1,10 @@
 OutputDir				./
 OutputFile				E.hdf5
 CC				11.19968548288168
-V200				185.67685827902602
+V200				185.67685827902605
 LAMBDA				0.033
 AnisotropyRadius				0.0
-MD				0.03225806451612904
+MD				0.03225806451612903
 MB				0.0
 MBH				4.7043010752688175e-06
 N_HALO				41142
@@ -13,7 +13,7 @@ N_GAS				4800
 N_BULGE				0
 UseQrng				0
 WriteDensity				0
-JD				0.03225806451612904
+JD				0.03225806451612903
 H				0
 DiskHeight				0.1
 RadialDispersionFactor				1.0

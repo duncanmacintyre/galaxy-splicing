@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=00:40:00   # walltime in d-hh:mm or hh:mm:ss format
+#SBATCH --time=01:10:00   # walltime in d-hh:mm or hh:mm:ss format
 #SBATCH --job-name="mg C5"
 #SBATCH --output=C5.slurm_log
 #SBATCH --error=C5.slurm_error

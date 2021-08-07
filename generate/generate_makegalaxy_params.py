@@ -94,7 +94,7 @@ values = ['./',
             '0',                        # write density instead of mass
             '0.064',                    # Disk spin fraction
             '0',                        # Disk scale L, usually set by disk spin
-            '0.1',                      # SD height in units of radial SL
+            '0.5',                      # SD height in units of radial SL
             '1.0',                      # Radial dispersion
             'exponential',              # Stellar population mode
             '13.9',                     # Disk population age (in Gyr) - doesn't matter, age has no effect
@@ -224,6 +224,7 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
             tmp_values[idx['MB']] = str(float(bulge_mass_frac[i]))
             tmp_values[idx['MD']] = str(float(disk_mass_frac[i]))
             tmp_values[idx['JD']] = str(float(disk_mass_frac[i]))
+            tmp_values[idx['GasFraction']] = str(float(fgas[i]))
 
             tmp_values[idx['N_HALO']] = str(int(Ndm[i]))
             tmp_values[idx['N_DISK']] = str(int(Nstars[i]))
