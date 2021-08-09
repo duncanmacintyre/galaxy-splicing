@@ -1,0 +1,134 @@
+%----  Relevant files
+InitCondFile  real012
+OutputDir     ./
+
+%---- File formats 
+ICFormat    3  % 1=binary, 3=hdf5, 4=cluster 
+SnapFormat  3  % 1=binary, 3=hdf5 
+
+%---- Output parameters 
+RestartFile                 restart 
+SnapshotFileBase            snapshot 
+OutputListOn                0  % =1 to use list in "OutputListFilename" 
+OutputListFilename          output_times.txt  % list of times for snaps 
+NumFilesPerSnapshot         1 
+NumFilesWrittenInParallel   1  % must be < N_processors & power of 2
+
+%---- Output frequency 
+TimeOfFirstSnapshot     0.0
+TimeBetSnapshot         0.005
+TimeBetStatistics       0.05 
+
+%---- CPU-time limits 
+TimeLimitCPU            86400    % in seconds 
+CpuTimeBetRestartFile   4000              % in seconds 
+ResubmitOn              1
+ResubmitCommand         ./resubmit.sh
+
+%----- Memory alloction 
+MaxMemSize          4100    % sets maximum MPI memory use per process in MByte 
+PartAllocFactor     4.0                  % memory load allowed for better cpu balance 
+BufferSize          350                  % in MByte
+
+%---- Characteristics of run 
+TimeBegin   0.0               % beginning of the simulation 
+TimeMax     2.5    % end of the simulation 
+
+%---- Cosmological parameters 
+ComovingIntegrationOn   0       % is it cosmological? (yes=1, no=0)
+BoxSize                 10000.  % in code units
+Omega0                  0       % =0 for non-cosmological
+OmegaLambda             0       % =0 for non-cosmological
+OmegaBaryon             0       % =0 for non-cosmological
+HubbleParam             1.0     % little 'h'; =1 for non-cosmological runs
+
+%---- Accuracy of time integration 
+MaxSizeTimestep         0.005   % in code units, set for your problem
+MinSizeTimestep         1.0e-12 % set this very low, or risk stability
+
+%---- Tree algorithm, force accuracy, domain update frequency 
+TreeDomainUpdateFrequency  0.1  % 0.0005-0.05, dept on core+particle number  
+
+%---- System of units 
+UnitLength_in_cm            3.085678e21     % 1.0 kpc/h
+UnitMass_in_g               1.989e43        % 1.0e10 solar masses/h
+UnitVelocity_in_cm_per_s    1.0e5           % 1 km/sec
+GravityConstantInternal     0               % calculated by code if =0
+
+%---- Initial temperature & temperature floor 
+InitGasTemp     0       % set by IC file if =0 
+MinGasTemp      10.     % don't set <10 in explicit feedback runs, otherwise 0
+
+%---- Density/volume estimation (kernel) 
+DesNumNgb               64      % 32 for standard kernel, 60-114 for quintic 
+MaxHsml                 250.    % minimum gas kernel length (some very large value to prevent errors)
+MinGasHsmlFractional    1.0     % minimum kernel length relative to gas force softening (<= 1)
+
+%---- Gravity softening
+% by gas resolution: 0.5 for 3e7, 0.25 for 1e6, 0.1 for 5e5 if adaptive gravsoft on
+SofteningGas    2.  % gas (type=0) (in units above, =1 pc softening)
+SofteningHalo   2.  % dark matter/collisionless particles (type=1)
+SofteningDisk   2.  % collisionless particles (type=2)
+SofteningBulge  2.  % collisionless particles (type=3)
+SofteningStars  2.  % stars spawned from gas (type=4)
+SofteningBndry  2.  % black holes (if active), or collisionless (type=5)
+
+
+
+%-------------------------------------------------------------------------
+%-------------------------------------------------------------------------
+%---------- Physics Modules ----------------------------------------------
+%-------------------------------------------------------------------------
+%-------------------------------------------------------------------------
+
+
+%---- Star Formation parameters (GALSF on)
+CritPhysDensity     0.2     % critical physical density for star formation (cm^(-3)) 
+SfEffPerFreeFall    0.02    % SFR/(Mgas/tfreefall) for gas which meets SF criteria
+
+%---- sub-grid (Springel+Hernquist/GADGET/AREPO) "effective equation of state" 
+%------- star formation+feedback model (GALSF_EFFECTIVE_EQS on)
+TempSupernova       4.87e7       % in Kelvin (temp of hot gas in 2-phase model)
+TempClouds          10000.0      % in Kelvin (temp of cold gas in 2-phase model)
+FactorSN            0.18         % SNe coupling frac (frac of egy retained in hot)
+%------- the sub-grid "decoupled winds" model (GALSF_SUBGRID_WINDS on)
+WindEfficiency          2.0      % mass-loading (Mdot_wind = SFR * WindEfficiency) 
+WindEnergyFraction      0.5037   % fraction of SNe energy in winds (sets velocity) 
+WindFreeTravelMaxTime   0.02     % 'free-stream time' in units of t_Hubble(z)
+WindFreeTravelDensFac   0.1      % 'free-stream' until density < this * CritPhysDensity
+
+%-------------- Black Hole accretion & formation (BLACK_HOLES on)
+%--- formation/seeding  
+SeedBlackHoleMass            1.0e-6     % initial mass (on-the-fly or single galaxy) 
+%--- accretion  
+BlackHoleAccretionFactor     1.0        % multiplier for mdot 
+BlackHoleEddingtonFactor     3.0        % fraction of eddington to cap (can be >1) 
+BlackHoleNgbFactor           4.0        % multiplier for kernel neighbors for BH 
+BlackHoleMaxAccretionRadius  2.0        % max radius for BH neighbor search/accretion 
+BlackHoleRadiativeEfficiency 0.1        % radiative efficiency 
+%--- feedback 
+BlackHoleFeedbackFactor      1.0        % generic feedback strength multiplier 
+BAL_f_accretion              0.1        % fraction of gas swallowed by BH (BH_BAL_WINDS) 
+BAL_v_outflow                0          % velocity (km/s) of BAL outflow (BH_BAL_WINDS) 
+
+%---- Isolated system parameters (ISOLATED_SYSTEM on)
+IsolatedSimBlackHoleStart    0.1               % start time for BH feedback, probably ~0.5 is fine
+IsolatedSimBlackHoleMass     0.000500152  % mass of one black hole particle (code units) 
+% ^- should be as massive as halo particles and as physical mass 
+IsolatedSimGasFraction       0.55102    % initial gas mass fraction (gas mass / (gas mass + star mass))
+IsolatedSimMstar             5.71202e+11    % total initial stellar mass (in Msun)
+IsolatedSimHaloMass          1.27319e+13       % total initial halo mass (in Msun)
+% stellar feedback is stronger for smaller values IsolatedSimHaloMass
+
+%-------------- Grackle UVB file (GRACKLE on)
+GrackleDataFile              CloudyData_UVB=HM2012_shielded.h5
+
+%-------------- These parameters shouldn't be necessary but GIZMO complains if they're missing :(
+SofteningHaloMaxPhys         0.1
+SofteningDiskMaxPhys         0.1
+SofteningBulgeMaxPhys        0.1
+SofteningGasMaxPhys          0.1
+SofteningStarsMaxPhys        0.1
+SofteningBndryMaxPhys        0.1
+TimeBetOnTheFlyFoF           1e12
+MinFoFMassForNewSeed         1e12

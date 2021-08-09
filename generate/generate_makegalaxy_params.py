@@ -16,6 +16,7 @@
 import numpy as np
 import pandas
 import itertools
+import collections
 
 ### CONFIGUATION OPTIONS ###
 
@@ -137,10 +138,24 @@ for i, key in enumerate(keys):
 #       mass_file is the path to a CSV file with columns label, Mgas, M*, Mvir
 #       write is whether to actually write any files (default True, of course)
 #       verbose is whether to print particle numbers for each galaxy (default False)
+#       inflate_fgas is one of
+#           False, None
+#              use gas fractions given in the mass table file
+#
+#           True
+#              increase gas fractions so we can simulate until desired fgas fraction reached
+#                           gas mass > 4e9 Msun                     increase by 15%
+#                           2.7e9 Msun < gas mass ≤ 4e9 Msun        increase by 8%
+#                           gas mass ≤ 2.7e9 Msun                   increase by 1%
+#
+#           dict
+#              increase gas fractions by custom amounts, e.g. use {'C10': 0.1} to increase the gas
+#              fraction of the galaxy called 'C10' by 10% and other gas fractions by defaults above
+#
 # You can pass additional keyword arguments. These will become new default values for
-# makegalaxy parameters. e.g. pass REDSHIFT=2 to set the redshift parameter to 2.
+# makegalaxy parameters. e.g. pass REDSHIFT=2 to set the 'REDSHIFT' parameter to 2.
 def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_file: str,
-                               write: bool = True, verbose: bool = False,
+                               write: bool = True, verbose: bool = False, inflate_fgas = False,
                                **kwargs):
 
     # mass per particle of each kind
@@ -167,13 +182,34 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     # number of parameter files that will be generated (one for each galaxy)
     M = keep.sum()
 
+    # get array of galaxy labels
+    label = masses.loc[keep, 'label']
     # this iterator continuously cycles over the galaxy labels
-    labels = itertools.cycle(masses.loc[keep, 'label'])
+    labels = itertools.cycle(label)
     
     # these masses in units of the mass of the sun
     gas_mass = masses.loc[keep, 'Mgas'].to_numpy() * fac
     stars_mass = masses.loc[keep, 'M*'].to_numpy() * fac
     dm_mass = masses.loc[keep, 'Mvir'].to_numpy() * fac
+    
+    # --- inflate the gas fraction if desired ---
+    # this allows us to simulate in isolation until the true gas fraction is reached
+
+    if (inflate_fgas is not False) and (inflate_fgas is not None):
+        # fraction we should increase gas fractions by
+        #       gas mass > 4e9 Msun                   increase by 15%
+        #       2.7e9 Msun < gas mass ≤ 4e9 Msun      increase by 8%
+        #       gas mass ≤ 2.7e9 Msun                 increase by 1%
+        increase_by = np.where(gas_mass > 4e9, 0.15, np.where(gas_mass > 2.7e9, 0.08, 0.01))
+        # account for custom values given in dictionary (if one was given)
+        if isinstance(inflate_fgas, collections.Mapping):
+            for key in inflate_fgas:
+                increase_by[label == key] = inflate_fgas[key]
+        # how much will gas_mass increase by?
+        dm = gas_mass*increase_by
+        # apply the inflation
+        gas_mass = gas_mass + dm
+        stars_mass = stars_mass - dm
 
     # --- compute derived quantities ---
 
@@ -193,8 +229,7 @@ def generate_makegalaxy_params(gas_mass_resol: float, output_folder: str, mass_f
     Ngas = gas_mass / gas_mass_resol
     Ndm = dm_mass / dm_mass_resol
     Nstars = stars_mass / stars_mass_resol
-    Nbulge = bulge_mass / bulge_mass_resol
-
+    Nbulge = np.zeros(M)
     fgas = gas_mass / (stars_mass + gas_mass)
 
     # --- write the parameter files ---

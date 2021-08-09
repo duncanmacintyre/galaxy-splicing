@@ -26,14 +26,14 @@ mem_on_node = 4010*cpus_on_node
 path_to_slurm_script_template = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                              'protocluster.slurm_job.sh')
 path_to_gizmo_param_template = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                            'protocluster.param')
+                                            'isolation.param')
 
 # which version of GIZMO should we use? this is the commit SHA
 # we expect the binary to be at ~/bin/GIZMO_<commit_SHA>
 gizmo_commit = '9b787c1'
 
 # email address for slurm email notifications
-email = ""
+email = ''
 
 
 # ----- functions -----
@@ -58,7 +58,6 @@ email = ""
 # We assume that (1) there are no bulge or star particles, and (2) we should get masses 
 # from the mass table in the header, not from individual particle masses.
 #
-# !!!
 def suggest_resources(fname):
 
     with h5py.File(fname, 'r') as f:

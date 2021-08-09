@@ -8,8 +8,8 @@ MD				0.1302032409563247
 MB				0.0
 MBH				9.657418716065883e-07
 N_HALO				180130
-N_DISK				40446
-N_GAS				94375
+N_DISK				26290
+N_GAS				108531
 N_BULGE				0
 UseQrng				0
 WriteDensity				0
@@ -20,7 +20,7 @@ RadialDispersionFactor				1.0
 DiskPopMode				exponential
 DiskPopAge				13.9
 DiskPopTau				-106.0
-GasFraction				0.699999977748437
+GasFraction				0.8049999744107026
 MaxGasDiskHeight				2.0
 GasDistribution				0
 GasExpAlpha				1.0

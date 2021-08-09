@@ -26,6 +26,8 @@ import pandas
 import matplotlib.pyplot as plt
 import matplotlib.patches
 
+import common
+
 
 # ----- constants -----
 
@@ -37,21 +39,88 @@ time_snapshot_zero = 0 # time of snapshot 0 in code units
 
 out_dir = 'chosen' # directory to save chosen .hdf5 files and SFR plots in
 
+# path to fixed-with file of with desired gas fractions
+# must have a column 'label' with galaxy names and a column 'fgas' with gas fractions
+path_to_gas_fraction_table = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'generate', 'galaxy_masses_105.txt')
+
+
+# ----- setup -----
+
+# the dictionary fgas_target_dict has keys of galaxy names and values of desired gas fractions
+df_fgas = pandas.read_fwf(path_to_gas_fraction_table)
+fgas_target_dict = {k:v for k,v in zip(df_fgas['label'], df_fgas['fgas'])}
+del df_fgas
+
 
 # ----- functions -----
 
-# given non-negative time in Myr, return the number of first snapshot that would be at or after that time
-def time_to_snap(t):
-    return math.ceil((t/code_time_units_in_Myr - time_snapshot_zero) / time_between_snaps)
-assert time_to_snap(time_snapshot_zero*code_time_units_in_Myr) == 0
-assert time_to_snap((time_snapshot_zero + 0.01*time_between_snaps)*code_time_units_in_Myr) == 1
-assert time_to_snap((time_snapshot_zero + 6*time_between_snaps)*code_time_units_in_Myr) == 6
-assert time_to_snap(20) == math.ceil((20/code_time_units_in_Myr - time_snapshot_zero) / time_between_snaps)
+# given path to galaxy's Gizmo sim directory, choose snapshot, plot, and save output
+def process_one_sim(this_dir):
+    try:
+        # if this_dir = '/path/to/some_direc', galaxy_name = 'some_direc'
+        galaxy_name = os.path.basename(this_dir)
+        # gas fraction that we want this galaxy to have
+        fgas_target = fgas_target_dict[galaxy_name]
+        # choose snapshot that gives desired gas fraction
+        #       chosen_snap     its path
+        #       fgas            its gas fraction
+        #       chosen_time     its time
+        chosen_snap, fgas, chosen_time = choose_snap(this_dir, fgas_target)
 
-# given a snapshot number, return its time in Myr
-def snap_to_time(n):
-    return (time_snapshot_zero + n * time_between_snaps) * code_time_units_in_Myr
-assert snap_to_time(20) == (time_snapshot_zero + 20 * time_between_snaps) * code_time_units_in_Myr
+        # load values for star formation rate and corresponding times
+        t, sfr = load_sfr(os.path.join(this_dir, 'sfr.txt'))
+        # plot the SFR with an arrow pointing to the chosen snapshot
+        plot_sfr(t=t, sfr=sfr,
+                 snapshot_path=chosen_snap, snapshot_time=common.code_time_to_Myr(chosen_time),
+                 galaxy_name=galaxy_name, fgas=fgas, fgas_target=fgas_target,
+                 figure_save_path=os.path.join(out_dir, this_dir + '.sfr.pdf'))
+
+        # copy the snapshot to the output directory
+        shutil.copyfile(chosen_snap, os.path.join(out_dir, galaxy_name + '.hdf5'))
+    except Exception as e:
+        print('An error was encountered while processing {}. Skipping.'.format(this_dir))
+        print(repr(e))
+
+# given path to directory with Gizmo snapshots, choose gas fraction closest to fgas_target
+#   this_dir is the path to a directory containing Gizmo snapshot files
+#   returns tuple with three items:
+#       * path to chosen snapshot file inside this_dir, e.g. 'snapshot_023.hdf5'
+#       * actual gas fraction of the chosen snapshot file, e.g. 0.72
+#       * time of chosen snapshot in code units
+def choose_snap(this_dir, fgas_target):
+    # get snapshot file names and gas fractions, and throw an error if no snapshot files are found
+    snap_paths = find_snapshot_files(this_dir)
+    if len(snap_paths)==0:
+        print('No snapshot files were found!')
+        assert False
+    snap_fgas = np.fromiter((get_snapshot_fgas(s) for s in snap_paths),
+                            count=len(snap_paths), dtype='float64')
+    # get index of the snapshot in snap_paths that has a gas fraction closest to the target
+    n = np.argmin(np.abs(snap_fgas - fgas_target))
+    # get time of chosen snapshot
+    with h5py.File(snap_paths[n], 'r') as f:
+        chosen_time = f['Header'].attrs['Time']
+    return (snap_paths[n], snap_fgas[n], chosen_time)
+
+# return tuple with paths to snapshot files inside this_dir
+def find_snapshot_files(this_dir):
+    return tuple((os.path.join(this_dir, s) for s in os.listdir(this_dir) if is_snapshot(s)))
+
+# given a file name, return True if it is a snapshot, False otherwise
+# e.g. is_snapshot('some_dir/snapshot_023.hdf5') gives True, is_snapshot('foo') gives False
+def is_snapshot(s):
+    b = os.path.basename(s)
+    return b.startswith('snapshot') and b.endswith('.hdf5')
+
+# return the gas fraction of a snapshot given its path
+def get_snapshot_fgas(snapshot_path):
+    with h5py.File(snapshot_path, 'r') as f:
+        Mgas = np.sum(common.grab_property(f, 0, 'Masses'))
+        Mstars = (np.sum(common.grab_property(f, 2, 'Masses'))
+                  + np.sum(common.grab_property(f, 3, 'Masses'))
+                  + np.sum(common.grab_property(f, 4, 'Masses')))
+    return Mgas/(Mgas+Mstars)
 
 # get time and SFR from file of given path sfr.txt in working directory and return as tuple of two arrays in Myr, Msun/yr respectively
 def load_sfr(sfr_file_path):
@@ -61,10 +130,11 @@ def load_sfr(sfr_file_path):
     return (t, sfr)
 
 # given time, sfr, snapshot's path and time in Myr, initial conditions path, and a galaxy name: print stats for the snapshot, plot the SFR with stats, and save figure to given path
-def plot_sfr(t, sfr, snapshot_path, snapshot_time, ic_path, galaxy_name, figure_save_path):
+def plot_sfr(t, sfr, snapshot_path, snapshot_time, galaxy_name,
+             fgas, fgas_target, figure_save_path):
     snapshot_name = os.path.basename(snapshot_path)
-    desc = make_description_of_gas_lost(snapshot_path, ic_path)
-    print('{} {}: {}'.format(galaxy_name, snapshot_name, desc))
+    desc = 'fgas: {:.3f} target: {:.3f}'.format(fgas, fgas_target)
+    print('{} {} ({})'.format(galaxy_name, snapshot_name, desc))
     sfr_for_snapshot_time = np.interp(snapshot_time, t, sfr)
 
     fig, ax = plt.subplots(constrained_layout=True)
@@ -87,83 +157,6 @@ def plot_sfr(t, sfr, snapshot_path, snapshot_time, ic_path, galaxy_name, figure_
 
     fig.savefig(figure_save_path)
     plt.close(fig)
-
-# given paths to snapshot and initial conditions: return string with how much gas lost to star formation
-def make_description_of_gas_lost(snapshot_path, ic_path):
-    N_snap_gas, m_snap_gas = get_amount_particles(snapshot_path, 0)
-    N_zero_gas, m_zero_gas = get_amount_particles(ic_path, 0)
-    N_snap_stars_formed, m_snap_stars_formed = get_amount_particles(snapshot_path, 4)
-    N_zero_disk, m_zero_disk = get_amount_particles(ic_path, 2)
-    return '{:d} of {:d} gas particles lost ({:.1f}%, {:.1f}% by mass)\ngas fraction: was {:.2f}, now {:.2f}\ngas mass: was {:.3g}, now {:.3g} M☉'.format(
-                N_zero_gas-N_snap_gas, N_zero_gas, 100*(N_zero_gas-N_snap_gas)/N_zero_gas, 100*(m_zero_gas-m_snap_gas)/m_zero_gas,
-                m_zero_gas/(m_zero_gas+m_zero_disk), m_snap_gas/(m_snap_gas+m_snap_stars_formed+m_zero_disk),
-                m_zero_gas, m_snap_gas)
-
-# given h5py.File f, return values for a part type and field or an empty array if not present
-def grab_property(f, part_type, field):
-    try:
-        prop = np.asarray(f['/PartType%d/%s' % (part_type, field)])
-    except KeyError:
-        prop = np.empty((0,))
-    return prop
-
-# given path to snapshot, return the number of particles and total mass (in Msun) for a certain part_type
-def get_amount_particles(snapshot_path, part_type):
-    with h5py.File(snapshot_path) as f:
-        masses = grab_property(f, part_type, 'Masses')
-        return (len(masses), np.sum(masses)*code_mass_units_in_Msun)
-
-# given non-negative int of snapshot number, return filename of its HDF5 file (with extension, without full path)
-def get_snap_filename(n):
-    return 'snapshot_{:0>3d}.hdf5'.format(n)
-assert get_snap_filename(0) == 'snapshot_000.hdf5'
-assert get_snap_filename(25) == 'snapshot_025.hdf5'
-
-# given non-negative int of snapshot number, return full path to its HDF5 file in the snap_dir folder
-def get_snap_path(n, snap_dir):
-    return os.path.join(snap_dir, get_snap_filename(n))
-
-# given time and SFR arrays in Myr and Msun/yr, return number for the snapshot we should choose for initial conditions
-#
-# strategy: We choose the first snapshot satisfying either
-#          (1) SFR remains below 1% of the global maximum for the 30 Myr after the snapshot; or
-#          (2) over subsequent 10 Myr, SFR max/min < 10%, over subsequent 15 Myr, SFR max/min < 20%,
-#              and over subsequent 45 Myr, SFR max/min < 55%.
-#
-def choose_snap(t, sfr):
-    # find time when galaxy is considered "stable" as per our strategy
-    # see also https://stackoverflow.com/a/8534381/13326516
-    accept_below = 0.01*np.max(sfr)
-    chosen_time = next(
-            (this_t for this_t in t if
-                np.all(np.abs(sfr[(t > this_t) & (t < this_t+30)]) < accept_below)
-                or (within_cutoff(0.1, sfr[(t > this_t) & (t < this_t+10) & (sfr != 0)])
-                    and within_cutoff(0.2, sfr[(t > this_t) & (t < this_t+15) & (sfr != 0)])
-                    and within_cutoff(0.55, sfr[(t > this_t) & (t < this_t+45) & (sfr != 0)]))),
-            None) # default: will be None if condition never reached
-    if chosen_time is not None: # if we found a time, make sure it is not later than last snapshot
-        chosen_time = min(chosen_time, t[-1] - time_between_snaps*code_time_units_in_Myr)
-    else: # if we could not find a time, default to the last snapshot
-        chosen_time = t[-1] - time_between_snaps*code_time_units_in_Myr
-    return time_to_snap(chosen_time)
-# Note: This method of making sure the snapshot number does not exceed the last snapshot is probably
-# a bit buggy. It would be better to make a separate function to figure out what the max snapshot 
-# number is by looking at what files exist.
-# Practically, this doesn't matter much because we expect to choose a time long before the last snapshot.
-
-# return True if x has at least two elements and max(x)/min(x) < cutoff+1; otherwise return False
-def within_cutoff(cutoff, x):
-    return (len(x)>1) and ((np.max(x)/np.min(x)-1)<cutoff)
-
-# given path to galaxy sim directory, choose snapshot, plot, and save output
-def process_one_sim(this_dir):
-    t, sfr = load_sfr(os.path.join(this_dir, 'sfr.txt'))
-    n = choose_snap(t, sfr)
-    plot_sfr(t=t, sfr=sfr, snapshot_path=get_snap_path(n, this_dir), snapshot_time=snap_to_time(n),
-             ic_path=get_snap_path(0, this_dir), galaxy_name=this_dir,
-             figure_save_path=os.path.join(out_dir, this_dir + '.sfr.pdf'))
-    shutil.copyfile(get_snap_path(n, this_dir), os.path.join(out_dir, this_dir + '.hdf5'))
-
 
 
 # ----- script part -----
