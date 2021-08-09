@@ -65,15 +65,13 @@ MaxHsml                 250.    % minimum gas kernel length (some very large val
 MinGasHsmlFractional    1.0     % minimum kernel length relative to gas force softening (<= 1)
 
 %---- Gravity softening
-% by gas resolution: 0.5 for 3e7, 0.25 for 1e6, 0.1 for 5e5
-SofteningGas    0.25  % gas (type=0) (in units above, =1 pc softening)
-SofteningHalo   0.25  % dark matter/collisionless particles (type=1)
-SofteningDisk   0.25  % collisionless particles (type=2)
-SofteningBulge  0.25  % collisionless particles (type=3)
-SofteningStars  0.25  % stars spawned from gas (type=4)
-SofteningBndry  0.25  % black holes (if active), or collisionless (type=5)
-AGS_DesNumNgb   64    % neighbor number for calculating adaptive gravsoft
-
+% by gas resolution: 0.5 for 3e7, 0.25 for 1e6, 0.1 for 5e5 if adaptive gravsoft on
+SofteningGas    2.  % gas (type=0) (in units above, =1 pc softening)
+SofteningHalo   2.  % dark matter/collisionless particles (type=1)
+SofteningDisk   2.  % collisionless particles (type=2)
+SofteningBulge  2.  % collisionless particles (type=3)
+SofteningStars  2.  % stars spawned from gas (type=4)
+SofteningBndry  2.  % black holes (if active), or collisionless (type=5)
 
 
 
