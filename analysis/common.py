@@ -186,14 +186,31 @@ field_size = {    # how many items per field
 def grab_property(f, part_type, field, num_metals=None):
     try:
         return np.asarray(f['/PartType%d/%s' % (part_type, field)])
-    except KeyError:
-        return empty_array(field)
+    except KeyError: # handle case where the field is not present
+        if field=='Masses': # if field is 'Masses', we can try to use a mass table from the header 
+            try:
+                mass_per_particle = f['/Header'].attrs['MassTable'][part_type]
+                n_particles = len(grab_property(f, part_type, 'Coordinates'))
+                return np.ones((n_particles,))*mass_per_particle
+            except KeyError: # there was no mass table present: return empty array of correct shape
+                return empty_array('Masses')
+        else: # the field is missing and isn't 'Masses': return empty array of correct shape
+            return empty_array(field)
 
 # return empty numpy array of suitable size for given field
 def empty_array(field, num_metals=None):
     if (num_metals is None) or (field!='Metallicity'): # most of time
-        n = field_size[field] # how many entries per particle
-    else: # we need to use the custom number of metals that was given
+        try:
+            n = field_size[field] # how many entries per particle
+        except KeyError as e: # handle calls where invalid value was given for field
+            valid_fields = set(field_size.keys()) # these are the valid choices for field
+            if field in valid_fields: # field is valid, the KeyError is due to some other reason
+                raise e 
+            else: # an invalid field was given
+                raise ValueError(
+                    '{} is not a valid value for field. The choices are: {}'.format(
+                        field, valid_fields))
+    else: # field is 'Metallicity' and we need to use the custom number of metals that was given
         n = num_metals
     return np.empty((0,) if n==1 else (0, n))
 
