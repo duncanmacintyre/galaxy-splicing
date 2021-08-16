@@ -16,7 +16,7 @@ from matplotlib.colors import LogNorm
 import numpy as np
 import h5py
 
-from common import locate_peak_density_3D_and_plot, code_time_to_Myr
+from common import locate_peak_density_3D_and_plot, code_time_to_Myr, grab_property
 
 parser = ArgumentParser(
     description='Given GIZMO snapshot files, generates a PDF for each that shows a 2D histogram of the stellar mass distribution.',
@@ -65,18 +65,17 @@ def plot_and_save_from_snapshot_file(fname):
 
     # load the data from the HDF5 snapshot file
     with h5py.File(fname) as f:
-        try:
-            coords1 = np.asanyarray(f['/PartType4/Coordinates'])
-            masses1 = np.asanyarray(f['/PartType4/Masses'])
-        except KeyError:
-            coords1 = np.empty((0, 3))
-            masses1 = np.empty((0,))
-        coords2 = np.asanyarray(f['/PartType2/Coordinates'])
-        masses2 = np.asanyarray(f['/PartType2/Masses'])
+        coords = np.concatenate(
+                (grab_property(f, 2, 'Coordinates'),
+                 grab_property(f, 3, 'Coordinates'),
+                 grab_property(f, 4, 'Coordinates')),
+                axis=0)
+        masses = np.concatenate(
+                (grab_property(f, 2, 'Masses'),
+                 grab_property(f, 3, 'Masses'),
+                 grab_property(f, 4, 'Masses')),
+                axis=0)
         time = code_time_to_Myr(f['/Header'].attrs['Time']) # time in Myr
-
-    coords = np.concatenate((coords1, coords2), axis=0)
-    masses = np.concatenate((masses1, masses2), axis=0)
     
     # set up a figure and axes
     if dpi is not None:
