@@ -14,7 +14,7 @@ from common import grab_property, code_mass_to_Msun
 # ----- constants -----
 
 # in this directory, we will create a simulation subdirectory for each galaxy
-gizmo_top_dir = os.path.abspath('/scratch/{}/gizmo-galaxies-in-isolation-1e6'.format(os.getenv('USER')))
+gizmo_top_dir = os.path.abspath('/scratch/{}/gizmo-galaxies-in-isolation-1e7'.format(os.getenv('USER')))
 
 # how many CPUs are there on each node on this cluster?
 cpus_on_node = 48
@@ -26,7 +26,7 @@ mem_on_node = 4010*cpus_on_node
 path_to_slurm_script_template = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                              'protocluster.slurm_job.sh')
 path_to_gizmo_param_template = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                            'isolation.param')
+                                            'isolation-1e7.param')
 
 # which version of GIZMO should we use? this is the commit SHA
 # we expect the binary to be at ~/bin/GIZMO_<commit_SHA>

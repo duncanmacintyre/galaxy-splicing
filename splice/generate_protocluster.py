@@ -44,7 +44,7 @@ density_present = False  # whether to include the gas field Density in output
 path_to_slurm_script_template = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                              'protocluster.slurm_job.sh')
 path_to_gizmo_param_template = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                            'protocluster.param')
+                                            'protocluster-1e7.param')
 
 # ----- setup -----
 

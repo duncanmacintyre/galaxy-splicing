@@ -1,6 +1,6 @@
 
-# initial conditions files - these are too large for git
-splice/chosen/real*.hdf5
+# 1e6 resolution initial conditions files - these are too large for GitHub
+splice/chosen-1e6/real*.hdf5
 
 # Created by https://www.toptal.com/developers/gitignore/api/c,linux,macos,python,windows,tex,latex
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,linux,macos,python,windows,tex,latex

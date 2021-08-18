@@ -1,0 +1,1 @@
+Note: the file C23.hdf5, used in splicing, is raw output from makegalaxy. (Gizmo had errors when simulating this galaxy in isolation. The errors are associated with having so few particles.) This should make little difference for results due to the galaxy's small size.
