@@ -16,7 +16,7 @@ from matplotlib.colors import LogNorm
 import numpy as np
 import h5py
 
-from common import locate_peak_density_3D_and_plot, code_time_to_Myr, grab_property
+import common
 
 parser = ArgumentParser(
     description='Given GIZMO snapshot files, generates a PDF for each that shows a 2D histogram of the stellar mass distribution.',
@@ -31,6 +31,7 @@ parser.add_argument('--dpi', default=None, type=int, help='figure dpi (pixels pe
 parser.add_argument('--radius', default=75, type=float, help='radius of cube region to plot in kpc; default 75')
 parser.add_argument('--nticks', default=7, type=int, help='how many tick marks on plots; default 7')
 parser.add_argument('--nbins', default=512, type=int, help='how many histogram bins in each direction; default 512')
+parser.add_argument('--mark-maximum', default=False, action='store_true', dest='markmax', help='place a marker at the location of peak stellar mass density')
 args = vars(parser.parse_args())
 
 # directory in which to store PDFs
@@ -51,6 +52,8 @@ radius = args['radius']
 nticks = args['nticks']
 # how many histogram bins in each direction
 nbins = args['nbins']
+# whether to mark location of peak stellar mass density
+markmax = args['markmax']
 
 # maps 'x', 'y', 'z' to 0, 1, 2
 map_xyz_012 = {'x':0, 'y':1, 'z':2}
@@ -66,16 +69,16 @@ def plot_and_save_from_snapshot_file(fname):
     # load the data from the HDF5 snapshot file
     with h5py.File(fname) as f:
         coords = np.concatenate(
-                (grab_property(f, 2, 'Coordinates'),
-                 grab_property(f, 3, 'Coordinates'),
-                 grab_property(f, 4, 'Coordinates')),
+                (common.grab_property(f, 2, 'Coordinates'),
+                 common.grab_property(f, 3, 'Coordinates'),
+                 common.grab_property(f, 4, 'Coordinates')),
                 axis=0)
         masses = np.concatenate(
-                (grab_property(f, 2, 'Masses'),
-                 grab_property(f, 3, 'Masses'),
-                 grab_property(f, 4, 'Masses')),
+                (common.grab_property(f, 2, 'Masses'),
+                 common.grab_property(f, 3, 'Masses'),
+                 common.grab_property(f, 4, 'Masses')),
                 axis=0)
-        time = code_time_to_Myr(f['/Header'].attrs['Time']) # time in Myr
+        time = common.code_time_to_Myr(f['/Header'].attrs['Time']) # time in Myr
     
     # set up a figure and axes
     if dpi is not None:
@@ -93,9 +96,16 @@ def plot_and_save_from_snapshot_file(fname):
         ax = (ax,)
 
     # plot histogram onto the axes
-    locate_peak_density_3D_and_plot(coords, axes=ax, cube_radius=radius, nbins=nbins, 
-                                    weights=masses, nticks=nticks,
-                                    squish_along=tuple(map_xyz_012[sa] for sa in squish_along))
+    coords[:,1]+=6.
+    if markmax:
+        common.locate_peak_density_3D_and_plot(coords, axes=ax, cube_radius=radius, nbins=nbins, 
+                                               weights=masses, nticks=nticks, mark_maximum=True,
+                                               squish_along=tuple(map_xyz_012[sa] for sa in squish_along))
+    else:
+        common.plot_2D_histogram(coords, axes=ax, cube_radius=radius, nbins=nbins, 
+                                 weights=masses, nticks=nticks, mark_maximum=False,
+                                 squish_along=tuple(map_xyz_012[sa] for sa in squish_along))
+
 
     # set axis labels
     for a, sa in zip(ax, squish_along):

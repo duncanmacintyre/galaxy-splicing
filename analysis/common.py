@@ -19,8 +19,13 @@ def code_time_to_Myr(t):
 def code_mass_to_Msun(m):
     return 1.e10 * m
 
-# --- locate_peak_density_3D and locate_peak_density_3D_and_plot
-# for finding peak density in three dimensions and plotting 2D histograms with it
+
+# --- locate_peak_density_3D, locate_peak_density_3D_and_plot, and plot_2D_histogram
+# for finding peak density and plotting 2D histograms
+
+# we use this colormap in the plotting functions below
+cmap = copy.copy(get_cmap('plasma'))
+cmap.set_bad(color = 'w') # changes cmap to use white background
 
 # given an Nx3 array a of coordinates, return coordinates of the location with greatest density
 #   Bins coordinates into nbins^3 bins and finds bin with greatest count or total weighting.
@@ -94,6 +99,14 @@ def locate_peak_density_3D(a, cube_radius, nbins, weights=None, return_histogram
 #
 # Others as for locate_peak_density_3D. axes and squish_along should be same length if iterables.
 #
+# Notes:
+#   This funciton will be much slower than than plot_2D_histogram so the latter should be preferred
+#   when mark_maximum is False and we don't need the 3D histogram that this function gives.
+#
+#   The maximum that this function plots is the max in the 3D space whereas the max plotted by
+#   plot_2D_histogram is the max in a 2D projection. Therefore, when marking maxima, this function
+#   gives a more useful/robust maximum but is much slower.
+#
 def locate_peak_density_3D_and_plot(a, cube_radius, nbins, axes,
                                     squish_along=2, rasterized=True, nticks=7, mark_maximum=True, 
                                     weights=None, return_histogram=False):
@@ -127,8 +140,6 @@ def locate_peak_density_3D_and_plot(a, cube_radius, nbins, axes,
 #   mark_maximum is True or False; whether to indicate the peak weight density with a marker
 #   nticks is how many tick marks to use along each axis
 # doesn't return anything
-cmap = copy.copy(get_cmap('plasma')) # colormap to use
-cmap.set_bad(color = 'w') # changes cmap to use white background
 def _plot_results_of_locate_peak_density_3D(ax, squish_along, hist_results,
                                             rasterized, mark_maximum, nticks):
     # extract histogram output into variables
@@ -166,6 +177,108 @@ def _plot_results_of_locate_peak_density_3D(ax, squish_along, hist_results,
     ticks = np.linspace(edges[0], edges[-1], nticks)
     ax.set_xticks(ticks)
     ax.set_yticks(ticks)
+
+
+# plot a 2D histogram "map", for example, of stellar mass
+#   a                 Nx3 array a of coordinates
+#   cube_radius       plot will show domain (-cube_radius, cube_radius) along each axis
+#   nbins             plot will show nbins^2 boxes
+#   axes              an Axes to plot on or an iterable of Axes
+#   squish_along      0, 1, or 2 to plot looking along x, y, or z direction; or iterable of these
+#   rasterized        True or False; whether plotted histogram is raster image instead of vector
+#   nticks            how many tick marks to use along each axis
+#   mark_maximum      True or False; whether to plot a green plus showing bin with most items
+#   weights           None or an array of shape (N,) with weightings for points (i.e. masses)
+#   return_histogram  whether to return histogram
+#
+# if return_histogram is False, returns nothing
+#
+# if return_histogram is True and mark_maximum is False, returns a length-two tuple with:
+#   edges                         numpy array of bin edges, shape (nbins+1,)
+#   hist                          array of histogram probability density function
+# 
+# If axes and squish_along are iterables, hist will be tuples of histograms.
+#
+# Notes:
+#   This funciton will be faster than locate_peak_density_3D_and_plot and should always be
+#   preferred when mark_maximum is False and we don't need the 3D histogram that the latter gives.
+#
+#   The maximum that this function plots is the max in the 2D projection whereas the max plotted by
+#   locate_peak_density_3D_and_plot is the max in 3D space. Therefore, when marking maxima,
+#   locate_peak_density_3D_and_plot gives a more useful/robust maximum but is much slower.
+#
+def plot_2D_histogram(a, cube_radius, nbins, axes,
+                      squish_along=2, rasterized=True, nticks=7, mark_maximum=False, 
+                      weights=None, return_histogram=False):
+    
+    # these are the bin edges
+    edges = np.linspace(-cube_radius, cube_radius, nbins+1)
+    d_edges = 2.*cube_radius/nbins # width of bins
+
+    # compute and plot the 2D histogram(s)
+    # is axes an Axes or an iterable?
+    if hasattr(axes, '__iter__'):
+        # case: iterable - we iterate over axes and squish_along
+        if return_histogram:
+            return (edges, tuple((_plot_2D_histogram_helper(
+                                        a, edges, d_edges, nbins, ax, sa, rasterized=rasterized,
+                                        nticks=nticks, mark_maximum=mark_maximum,
+                                        weights=weights, return_histogram=True)
+                                 for ax, sa in zip(axes, squish_along))))
+        else:
+            for ax, sa in zip(axes, squish_along):
+                _plot_2D_histogram_helper(a, edges, d_edges, nbins, ax, sa, rasterized=rasterized,
+                                          nticks=nticks, mark_maximum=mark_maximum,
+                                          weights=weights, return_histogram=False)
+    else:
+        # case: just an Axes - we call _plot_2D_histogram_helper just once
+        if return_histogram:
+            return (edges, _plot_2D_histogram_helper(
+                                        a, edges, d_edges, nbins, axes, squish_along=squish_along, 
+                                        rasterized=rasterized, nticks=nticks,
+                                        mark_maximum=mark_maximum, weights=weights, 
+                                        return_histogram=True))
+        else:
+            _plot_2D_histogram_helper(a, edges, d_edges, nbins, axes, squish_along=squish_along, 
+                                      rasterized=rasterized, nticks=nticks,
+                                      mark_maximum=mark_maximum, weights=weights, 
+                                      return_histogram=False)
+
+
+# helper for above function - squish_along and axes can't be iterables
+def _plot_2D_histogram_helper(a, edges, d_edges, nbins, ax, squish_along=2, rasterized=True, nticks=7,
+                              mark_maximum=False, weights=None, return_histogram=False):
+    
+    # these are the coordinates along the two dimensions we keep
+    x = a[:,1] if squish_along==0 else a[:,0]
+    y = a[:,1] if squish_along==2 else a[:,2]
+    
+    # set up axes limits
+    ax.set_xlim(edges[[0, -1]])
+    ax.set_ylim(edges[[0, -1]])
+    ax.set_aspect('equal')
+
+    # compute and plot histogram
+    if weights is not None:
+        hist, _, _, _ = ax.hist2d(x, y, bins=edges, density=True, weights=weights, cmap=cmap,
+                                  norm=LogNorm(), rasterized=rasterized)
+    else:
+        hist, _, _, _ = ax.hist2d(x, y, bins=edges, density=True, cmap=cmap,
+                                  norm=LogNorm(), rasterized=rasterized)
+
+    # find and mark the maximum
+    if mark_maximum:
+        index_of_maximum = np.argmax(hist) # index of maximum in flattened array
+        coordinates_of_maximum = edges[list(divmod(index_of_maximum, nbins))] + d_edges
+        ax.scatter(*coordinates_of_maximum, c='chartreuse', s=10, linewidths=0.5, marker='+')
+
+    # set ticks
+    ticks = np.linspace(edges[0], edges[-1], nticks)
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+
+    if return_histogram:
+        return hist
 
 
 # ----- grab_property and empty_array

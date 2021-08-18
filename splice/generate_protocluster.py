@@ -56,7 +56,7 @@ parser.add_argument('--seed', type=int, default=None, help='integer seed for gen
 parser.add_argument('--no-copy', action='store_true', dest='no_copy', help="don't copy the input files into the log folder, use symbolic links instead")
 parser.add_argument('--load', metavar='LOAD_DIR', help='load a previously stored configuration; LOAD_DIR is the directory with log files')
 parser.add_argument('--mass-table', action='store_true', dest='mass_table', help='for input files, use MassTable from headers; otherwise we get mass for each particle using Masses fields')
-parser.add_argument('--no-plot', dest='no_plot', action='store_true', help='do not make histogram plots of the initial conditions; vastly improves speed')
+parser.add_argument('--no-plot', dest='no_plot', action='store_true', help='do not make histogram plots of the initial conditions; slightly improves speed')
 parser.add_argument('--email', default='{email}', help='send Slurm email notifications to this address')
 parser.add_argument('--nodes', type=int, default=20, help='how many nodes we want to request in Slurm submission script')
 parser.add_argument('--tasks-per-node', dest='ntasks_per_node', type=int, default=40, help='how many MPI tasks per node we want to request in Slurm submission script')
@@ -522,14 +522,14 @@ if not no_plot:
                        horizontalalignment='center', verticalalignment='center', size=9)
     print('Locating peak for upper subplots.')
     # plot zoomed in plots in the top row of subplots
-    common.locate_peak_density_3D_and_plot(stellar_coords, cube_radius=75, axes=(*ax[0,:], *ax2[0,:]),
-                                    nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=7, 
-                                    mark_maximum=True, weights=stellar_masses, return_histogram=False)
+    common.plot_2D_histogram(stellar_coords, cube_radius=75, axes=(*ax[0,:], *ax2[0,:]),
+                             nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=7, 
+                             mark_maximum=False, weights=stellar_masses, return_histogram=False)
     print('Locating peak for lower subplots.')
     # plot wider-field plots in the bottom row of subplots
-    common.locate_peak_density_3D_and_plot(stellar_coords, cube_radius=110, axes=(*ax[1,:], *ax2[1,:]),
-                                    nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=6,
-                                    mark_maximum=True, weights=stellar_masses, return_histogram=False)
+    common.plot_2D_histogram(stellar_coords, cube_radius=110, axes=(*ax[1,:], *ax2[1,:]),
+                             nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=6,
+                             mark_maximum=False, weights=stellar_masses, return_histogram=False)
     # for each galaxy, plot an arrow on each axis to show the velocity
     arrow_length = 20./np.max(galaxy_velocities) # how long in kpc should velocity arrows be, per km/s
     # arrow properties
