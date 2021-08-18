@@ -55,7 +55,6 @@ parser.add_argument('--log', metavar='LOG_DIR', help='directory in which to save
 parser.add_argument('--seed', type=int, default=None, help='integer seed for generating random variables; omit for random seed')
 parser.add_argument('--no-copy', action='store_true', dest='no_copy', help="don't copy the input files into the log folder, use symbolic links instead")
 parser.add_argument('--load', metavar='LOAD_DIR', help='load a previously stored configuration; LOAD_DIR is the directory with log files')
-parser.add_argument('--mass-table', action='store_true', dest='mass_table', help='for input files, use MassTable from headers; otherwise we get mass for each particle using Masses fields')
 parser.add_argument('--no-plot', dest='no_plot', action='store_true', help='do not make histogram plots of the initial conditions; slightly improves speed')
 parser.add_argument('--email', default='{email}', help='send Slurm email notifications to this address')
 parser.add_argument('--nodes', type=int, default=20, help='how many nodes we want to request in Slurm submission script')
@@ -69,7 +68,6 @@ log_dir = args.log
 seed = args.seed
 copy = False if args.no_copy is True else True
 load = args.load
-mass_table = args.mass_table
 no_plot = args.no_plot
 email = args.email
 nodes = args.nodes
@@ -267,26 +265,6 @@ for index, data_file in enumerate(fnames_in):
     Mbulge[index] = np.sum(this_bulge['Masses'])
     Mstar[index] = np.sum(this_star['Masses'])
     Mbh[index] = np.sum(this_bh['Masses'])
-
-    # We don't use /PartTypeX/Masses if mass_table is True. In this case
-    # we have to set them manually using the MassTable header data.
-    if mass_table:
-        mass_table_values = f['/Header'].attrs['MassTable']
-        
-        this_gas['Masses'] = np.ones(Ngas[index])
-        this_dm['Masses'] = np.ones(Ndm[index])
-        this_disk['Masses'] = np.ones(Ndisk[index])
-        this_bulge['Masses'] = np.ones(Nbulge[index])
-        this_star['Masses'] = np.ones(Nstar[index])
-        this_bh['Masses'] = np.ones(Nbh[index])
-
-        this_gas['Masses'][:] = mass_table_values[0]
-        this_dm['Masses'][:] = mass_table_values[1]
-        this_disk['Masses'][:] = mass_table_values[2]
-        this_bulge['Masses'][:] = mass_table_values[3]
-        this_star['Masses'][:] = mass_table_values[4]
-        this_bh['Masses'][:] = mass_table_values[5]
-
 
     if load is not None: # if --load was given, load the position and velocity for the galaxy
         with open(get_log_file_path(load, index), 'rb') as lf:
