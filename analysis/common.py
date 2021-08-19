@@ -2,6 +2,7 @@
 # DM: initial version July 2021
 
 import copy
+import warnings
 
 import numpy as np
 from matplotlib.cm import get_cmap
@@ -296,19 +297,44 @@ field_size = {    # how many items per field
 }
 
 # given h5py.File f, return values for a part type and field, or an empty array if not present
-def grab_property(f, part_type, field, num_metals=None):
+#
+#   num_metals   
+#           how many columns in metallicity field; the number of metals tracked is num_metals-1
+#   enfore_num_metals
+#           if True, make sure that any returned metallicities have expected number of columns - if 
+#           we load an unexpected shape, we discard it, give a RuntimeWarning, and return an array 
+#           of the  expected shape where we assume zero metallicity and 25% helium
+def grab_property(f, part_type, field, num_metals=None, enforce_num_metals=True):
     try:
-        return np.asarray(f['/PartType%d/%s' % (part_type, field)])
-    except KeyError: # handle case where the field is not present
+        x = np.asarray(f['/PartType%d/%s' % (part_type, field)])
+    except KeyError: # handle case where the field is not present in the hdf5 file
         if field=='Masses': # if field is 'Masses', we can try to use a mass table from the header 
             try:
                 mass_per_particle = f['/Header'].attrs['MassTable'][part_type]
                 n_particles = len(grab_property(f, part_type, 'Coordinates'))
-                return np.ones((n_particles,))*mass_per_particle
+                x = np.ones((n_particles,))*mass_per_particle
             except KeyError: # there was no mass table present: return empty array of correct shape
-                return empty_array('Masses')
+                x = empty_array('Masses')
         else: # the field is missing and isn't 'Masses': return empty array of correct shape
-            return empty_array(field)
+            x = empty_array(field)
+    else: # this executes if we've finished try and a KeyError wasn't raised
+        # if enforce_num_metals and we are loading metallicity, make sure desired number of metals
+        if enforce_num_metals and field=='Metallicity':
+            n = num_metals if num_metals is not None else default_num_metals
+            if (n==1) and (len(x.shape)!=1):
+                warnings.warn(
+                    RuntimeWarning('The loaded metallicity had an unexpected number of metals. We ignore it and set the metallicity to zero.'))
+                x = np.zeros((len(grab_property(f, part_type, 'Coordinates',
+                                                num_metals=1, enforce_num_metals=False)),))
+            elif (n>1) and ((len(x.shape)==1) or (x.shape[1]!=n)):
+                warnings.warn(
+                    RuntimeWarning('The loaded metallicity had an unexpected number of metals. We ignore it and set the metallicity to zero and He to 25%.'))
+                x = np.zeros((len(grab_property(f, part_type, 'Coordinates',
+                                                num_metals=n, enforce_num_metals=False)),
+                              n))
+                x[:,1] = 0.25
+
+    return x
 
 # return empty numpy array of suitable size for given field
 def empty_array(field, num_metals=None):
