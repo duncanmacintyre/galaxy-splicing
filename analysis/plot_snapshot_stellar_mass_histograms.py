@@ -96,7 +96,6 @@ def plot_and_save_from_snapshot_file(fname):
         ax = (ax,)
 
     # plot histogram onto the axes
-    coords[:,1]+=6.
     if markmax:
         common.locate_peak_density_3D_and_plot(coords, axes=ax, cube_radius=radius, nbins=nbins, 
                                                weights=masses, nticks=nticks, mark_maximum=True,
