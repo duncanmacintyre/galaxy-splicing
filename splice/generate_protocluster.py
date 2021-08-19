@@ -498,12 +498,12 @@ if not no_plot:
             a.plot(r*np.cos(angle), r*np.sin(angle), color='grey', linestyle=':')
             a.annotate(str(r) + ' kpc', np.array((-1,1))*np.sqrt(0.5)*(r+5), c='grey', rotation=45,
                        horizontalalignment='center', verticalalignment='center', size=9)
-    print('Locating peak for upper subplots.')
+    print('Making histograms for upper subplots.')
     # plot zoomed in plots in the top row of subplots
     common.plot_2D_histogram(stellar_coords, cube_radius=75, axes=(*ax[0,:], *ax2[0,:]),
                              nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=7, 
                              mark_maximum=False, weights=stellar_masses, return_histogram=False)
-    print('Locating peak for lower subplots.')
+    print('Making histograms for lower subplots.')
     # plot wider-field plots in the bottom row of subplots
     common.plot_2D_histogram(stellar_coords, cube_radius=110, axes=(*ax[1,:], *ax2[1,:]),
                              nbins=512, squish_along=[1,2,0,1,2,0], rasterized=True, nticks=6,
@@ -513,8 +513,8 @@ if not no_plot:
     # arrow properties
     ap = {'width':0.05, 'headwidth':0.4, 'headlength':0.4,
           'shrink':0, 'color':'chartreuse', 'alpha':0.7} 
+    print('Plotting annotations.')
     for coord, vel, fname in zip(galaxy_coordinates, galaxy_velocities, fnames_in):
-        print('Plotting annotation for {}'.format(fname))
         # get a descriptive label for this galaxy (to include in plots) from the file name
         # are we loading and is fname a symbolic link?
         # if yes, get label from file name that link points to
@@ -539,17 +539,18 @@ if not no_plot:
     fig.savefig(get_plot_path(log_dir, protocluster_name))
     fig2.savefig(get_plot_path_no_arrows(log_dir, protocluster_name))
     # delete the figure to free up memory
+    print('Clearing figures.')
     fig.clf()
     fig2.clf()
     plt.close(fig)
     plt.close(fig2)
 
+# generate HDF5 file
+print('Generating HDF5 file.')
+
 # generate new particle IDs, starting at 1
 new_ids = np.arange(1, tot_part + 1, 1, dtype='uint32')
 
-# generate HDF5 file
-
-print('Generating HDF5 file.')
 with h5py.File(fname_out, 'w') as fp:
 
     # set header properties
