@@ -8,6 +8,7 @@ from whereswitch import whereswitch
 
 # load the data
 df = pandas.read_fwf('galaxy_masses_105.txt')
+df_all = pandas.read_fwf('galaxy_masses.txt')
 
 # angular size distance to protocluster in kpc
 # http://www.astro.ucla.edu/%7Ewright/CosmoCalc.html
@@ -17,8 +18,16 @@ df = pandas.read_fwf('galaxy_masses_105.txt')
 # conversion factor from arcsec to kpc
 ratio_kpc_arcsec = 7.
 
-# k is a logical array of those galaxies not in SPIREc
-k = df['label'].map(lambda s: re.match(r'SPIREc.', s) is None)
+# k is a logical array of those galaxies not in SPIREc (indexing df_all)
+k = df_all['label'].map(lambda s: re.match(r'SPIREc.', s) is None)
+
+# the galaxies from Miller+2018
+miller = {
+    'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8',
+    'C9', 'C10', 'C11', 'C13', 'C14', 'C17'
+}
+# logical array of those galaxies from Miller+ (indexing df)
+m = df['label'].map(lambda s: s in miller)
 
 # red_RGB = np.array([1, 0, 0], ndmin=2)
 # blue_RGB = np.array([0, 0, 1], ndmin=2)
@@ -31,7 +40,7 @@ k = df['label'].map(lambda s: re.match(r'SPIREc.', s) is None)
 #         ))
 #     return([0, 0, 0])
 
-def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra_cm_radius=750, colourbar=False, circle_text=True):
+def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra_cm_radius=750, colourbar=False, circle_text=True, label=True):
 
     if circles is None:
         circles = []
@@ -50,12 +59,12 @@ def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra
     # this will be (0, 0) and the centre of the circles
 
     # use midpoint between C1 and C6
-    # centre_ra = ra[(df['label'] == 'C1') | (df['label'] == 'C6')].mean()
-    # centre_dec = dec[(df['label'] == 'C1') | (df['label'] == 'C6')].mean()
+    centre_ra = ra[(df['label'] == 'C1') | (df['label'] == 'C6')].mean()
+    centre_dec = dec[(df['label'] == 'C1') | (df['label'] == 'C6')].mean()
 
     # find ra, dec coordinates of galaxy to use as temporary centre
-    centre_ra = ra[(df['label'] == centre)]
-    centre_dec = dec[(df['label'] == centre)]
+    # centre_ra = ra[(df['label'] == centre)]
+    # centre_dec = dec[(df['label'] == centre)]
 
     # compute coordinates in kiloparsecs
     x = ratio_kpc_arcsec * (ra - centre_ra) * np.cos(c.dec.radian) # position north-south
@@ -101,14 +110,17 @@ def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra
         fig.colorbar(s, ax=ax)
 
     # plot labels for galaxies
-    for ix, iy, itxt in zip(x, y, df['label']):
-        ax.annotate(str(itxt), (ix, iy), xytext=(ix+0.2, iy+0.2)) 
+    if label:
+        for ix, iy, itxt in zip(x, y, df['label']):
+            ax.annotate(str(itxt), (ix, iy), xytext=(ix+0.2, iy+0.2)) 
 
     ax.set_aspect('equal')
 
     # x-axis should go from positive to negative (to match Hill+ 2020)
     lim = ax.get_xlim()
     ax.set_xlim(lim[1], lim[0])
+
+    return fig
 
     # distance from centre of mass
     # r = np.sqrt(x**2 + y**2)
@@ -146,6 +158,14 @@ def plotposweights(df, circles=(90, 210), centre='C20', centre_radius=210, extra
 
 
 
-plotposweights(df, circles=(95,), centre_radius=95, colourbar=False)
+fig1 = plotposweights(df_all, circles=(65,110), centre_radius=110, label=False, circle_text=False)
+fig2 = plotposweights(df_all[k], circles=(65,110), centre_radius=110, label=False, circle_text=False)
+fig3 = plotposweights(df, circles=(65,110), centre_radius=110)
+fig4 = plotposweights(df[m], circles=(65,110), centre_radius=110)
+
+fig1.savefig('fig1.pdf')
+fig2.savefig('fig2.pdf')
+fig3.savefig('fig3.pdf')
+fig4.savefig('fig4.pdf')
 
 plt.show()
