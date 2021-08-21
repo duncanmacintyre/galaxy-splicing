@@ -53,23 +53,10 @@ This script is multithreaded; I like to use Slurm scripts like:
 #SBATCH --mem=32000
 #SBATCH --cpus-per-task=8
 module load hdf5 scipy-stack
-python /path/to/get_masses_from_snapshots.py -n 200 -R $(cat /path/to/radius_bins.txt) -t 0.01 
+python /path/to/get_masses_from_snapshots.py -f snapshot_{000...400} -R $(cat /path/to/radius_bins.txt) 
 ```
 
-This will operate on files snapshot_000.hdf5, snapshot_001.hdf5, ..., snapshot_199.hdf5 in the directory in which it is submitted. Observe the radius_bins.txt file; I often `cat` it to get consistent radii to use with the `-R` argument. Note that you should always replace the `0.01` with whatever the time between snapshots is in physical units. (The Gizmo parameter file defines the time between snapshots in code units.)
-
-This script could be improved in several ways.
-
-* It could be changed to get times from the snapshot file headers directly instead of requiring the time between snapshots. Something like:
-
-```
->>> import h5py
->>> import common
->>> f = h5py.File('snapshot_004.hdf4', 'r')
->>> time = common.code_time_to_Myr(f['Header'].attrs['Time'])
-```
-
-* It could be changed so that you specify the paths to the snapshot files rather than giving a bunch of snapshot file numbers. (This would be more flexible.)
+This will operate on files snapshot_000.hdf5, snapshot_001.hdf5, ..., snapshot_400.hdf5 in the directory in which it is submitted. Observe the radius_bins.txt file; I often `cat` it to get consistent radii to use with the `-R` argument. (The Gizmo parameter file defines the time between snapshots in code units.)
 
 ### stellar_mass_radial_envelope/plot_mass_envelopes.py
 

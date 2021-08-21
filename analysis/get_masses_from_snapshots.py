@@ -14,24 +14,26 @@ import os.path
 import sys
 import multiprocessing
 
-from common import locate_peak_density_3D
+import common
 
 # ---------- argument parsing
 
-parser = ArgumentParser(description='Extract masses from GIZMO snapshot files, optionally computing mass contained in radial bins')
-parser.add_argument('data_dir', help='path to directory containing snapshot files')
-g1 = parser.add_mutually_exclusive_group(required=True)
-g1.add_argument('-R', nargs='+', type=float, help='compute mass within bins - will use radii R [R [R ...]]')
-g1.add_argument('-r', nargs=2, metavar=('DR', 'MAX_R'), type=float, help='compute mass within bins - will use radii DR, 2DR, 3DR, ... up to but not including MAX_R')
-g1.add_argument('--total-only', action='store_true', dest='total_only', help='compute total masses only, do not bin by radii')
+parser = ArgumentParser(description='Extract masses from GIZMO snapshot files, optionally computing mass contained in radial bins. You most likely want to use only the -f and -R arguments.')
 g2 = parser.add_mutually_exclusive_group(required=True)
-g2.add_argument('-N', nargs='+', type=int, help='the snapshot file numbers to use')
-g2.add_argument('-n', type=int, metavar='MAX_SNAP', help='use snapshot numbers 0, 1, 2, 3, ... up to but not including MAX_SNAP; e.g. use 100 for 0 through 99')
+g2.add_argument('-f', metavar='FNAME', nargs='+', help='paths to the .hdf5 snapshot files to process; rows in output have same order as files given')
+g2.add_argument('-N', nargs='+', type=int, help='process these snapshot numbers in the working directory; e.g. use -N 3 5 21 to process snapshot003.hdf5, snapshot005.hdf5, and snapshot021.hdf5 in the working directory or in the directory specified by --data-dir')
+g2.add_argument('-n', type=int, metavar='NUM_SNAP', help='same as -N 0, 1, 2, 3, ..., NUM_SNAP - 1')
+parser.add_argument('--data-dir', dest='data_dir', help='path to directory containing snapshot files; only use with -N or -n; default working directory')
+g1 = parser.add_mutually_exclusive_group(required=True)
+g1.add_argument('-R', nargs='+', type=float, help='compute mass contained within spherical bins of radii R [R [R ...]]')
+g1.add_argument('-r', nargs=2, metavar=('DR', 'MAX_R'), type=float, help='compute mass contained within spherical bins of radii DR, 2DR, 3DR, ... up to but not including MAX_R')
+g1.add_argument('--total-only', action='store_true', dest='total_only', help='compute total masses only, do not bin by radii')
 g3 = parser.add_mutually_exclusive_group(required=False)
-g3.add_argument('-T', nargs='+', type=float, help='the times for each snapshot number')
-g3.add_argument('-t', metavar='DT', type=float, help='snapshots have time N*DT where N is snapshot number')
+g3.add_argument('--no-time', dest='no_time', action='store_true', help='do not include snapshot times in the results')
+g3.add_argument('-T', nargs='+', type=float, help='instead of extracting times from the .hdf5 files, manually assign times T, [T ...] to the snapshots')
+g3.add_argument('-t', metavar='DT', type=float, help='instead of extracting times from the .hdf5 files, assign each snapshot the time N*DT where N is snapshot number given by -N or -n')
 g4 = parser.add_mutually_exclusive_group(required=False)
-g4.add_argument('--print', action='store_true', help='print the results instead of saving them to files')
+g4.add_argument('--print', action='store_true', help='print the results to the standard output instead of saving them to files')
 g4.add_argument('--prefix', help='prepend PREFIX to all output file names')
 parser.add_argument('--no-weight', action='store_true', dest='no_weight', help='when binning, set origin at max star particle density rather than max star mass density; improves speed by about an order of magnitude')
 parser.add_argument('--where', action='store_true', help='use numpy.where and matrix sum instead of numpy.fromiter and iterative sum; may or may not be faster')
@@ -43,46 +45,67 @@ args = parser.parse_args()
     
 # data_dir - the path to the folder containing snapshot files
 data_dir = args.data_dir
+if data_dir is None:
+    data_dir = '.'
+else:
+    assert not args.print
 
 # R - the radii we will use
 if args.total_only: # --total-only was given
     R = np.array([]) # we are not binning by radii
 elif args.R is not None: # -R was given
     R = np.array(args.R)
-    assert(len(R) > 0)
+    assert len(R) > 0
 elif args.r is not None: # -r was given
     R = np.arange(args.r[0], args.r[1], args.r[0])
-    assert(len(R) > 0)
+    assert len(R) > 0
 else:
-    assert(False) # this should never be reached
-assert(all(R > 0))
+    assert False # this should never be reache
+assert all(R > 0)
 
-# snaps - the numbers of the snapshot files to process
-if args.N is not None: # -N was given
-    snaps = np.array(args.N)
-else: # -n was given
-    snaps = np.arange(0, args.n)
-assert(len(snaps) > 0)
-assert(all(snaps >= 0))
-
-# t - the time associated with snapshots
-if args.T is not None:
-    t = np.array(args.T)
-    assert(all(t >= 0))
-    assert(len(t) == len(snaps))
-elif args.t is not None:
-    assert(args.t > 0)
-    t = (args.t * snaps)
+# snaps - the file paths of the snapshot files to process
+if args.f is not None: # -f was given
+    snaps = args.f
 else:
+    if args.N is not None: # -N was given
+        snap_nums = np.array(args.N)
+    else: # -n was given
+        snap_nums = np.arange(0, args.n)
+    assert all(snap_nums >= 0)
+    snaps = tuple(('snapshot_{}.hdf5'.format(str(i).zfill(3)) for i in snap_nums))
+assert len(snaps) > 0
+
+# t and include_times - the time associated with snapshots
+#   include_times is True or False for whether times should be included in output
+#   t is None or a numpy array
+#       None     ==> get times from .hdf5 files (if we want them)
+#       array    ==> use these times for the snapshots
+#   if include_times is False, the value of t is not well-defined and should not be accessed
+if args.no_time:
+    include_times = False
     t = None
+else:
+    include_times = True
+    if args.T is not None: # -T was given
+        t = np.array(args.T)
+        assert all(t >= 0)
+        assert len(t) == len(snaps)
+    elif args.t is not None: # -t was given
+        assert (args.N is not None) or (args.n is not None)
+        assert args.t > 0
+        t = (args.t * snap_nums)
+    else:
+        t = None # default case, we get times from .hdf5 files
 
 # output formatting
 delimiter = args.d # separator between fields in the output file
 precision = args.p # significant figures to use in the output file
-assert(precision > 0)
+assert precision > 0
 fieldwidth = args.w # all fields padded to be at least this width in the output file
-assert(fieldwidth > 0)
+assert fieldwidth > 0
 
+if args.mmg:
+    print('WARNING: --mmg behaviour not tested. Most likely not working.')
 
 # ---------- functions
 
@@ -115,7 +138,7 @@ if not args.where: # --where was not specified
         elif column_to_remove == 2:
             radii = np.sqrt(coords[:,0]**2 + coords[:,1]**2)
         else:
-            assert(False) # this line should never be reached
+            assert False # this line should never be reached
 
         return np.fromiter((masses[radii < i].sum() for i in R), count=len(R), dtype='float')
 else: # --where was specified
@@ -129,7 +152,7 @@ else: # --where was specified
         elif column_to_remove == 2:
             radii = np.sqrt(coords[:,0]**2 + coords[:,1]**2)
         else:
-            assert(False) # this line should never be reached
+            assert False # this line should never be reache
 
         return np.where(radii.reshape(1,-1) < R.reshape(-1,1), masses.reshape(1,-1), 0).sum(axis=1)
 
@@ -159,7 +182,7 @@ if args.mmg: # --mmg was specified
 # --- process_snapshot
 # given one snapshot, return a tuple of fours strings giving the mass-binning output
 #
-#   snap is the snapshot number
+#   snap is the path to the snapshot .hdf5 file
 #
 # returned strings are for total stars, stars formed in sim, gas, and halo respectively
 # each output string has 2+5*len(R) items
@@ -170,44 +193,44 @@ if args.mmg: # --mmg was specified
 #   next len(R) items: mass within cylinders about y-axis of radii from R
 #   next len(R) items: mass within cylinders about z-axis of radii from R
 #   next len(R) items: mass within cylinders, mean for the three orientations
-# if time is not None, will have an additional item for time first (3+5*len(R) in total)
+# if include_time, will have an additional item for time first (3+5*len(R) in total)
 # each item is fieldwidth long (or longer, if precision too high); items are separated by delimiter
 #
 if not args.mmg: # --mmg was not specified
     def process_snapshot(snap, time=None):
 
-        data_file = os.path.join(data_dir, 'snapshot_{}.hdf5'.format(str(snap).zfill(3)))
+        data_file = os.path.join(data_dir, snap)
         print('Operating on {}'.format(data_file))
         sys.stdout.flush()
 
         with h5py.File(data_file, 'r') as f:
-            disk_masses = np.array(f['/PartType2/Masses']) * 1e10
-            disk_coords = np.array(f['/PartType2/Coordinates'])
-            try: # it may be that no stars have formed yet, in which case we get an error
-                formed_stellar_masses = np.array(f['/PartType4/Masses']) * 1e10
-                formed_stellar_coords = np.array(f['/PartType4/Coordinates'])
-            except:
-                formed_stellar_masses = np.empty((0,), dtype=disk_masses.dtype)
-                formed_stellar_coords = np.empty((0, 3), dtype=disk_coords.dtype)
-            gas_masses = np.array(f['/PartType0/Masses']) * 1e10
-            gas_coords = np.array(f['/PartType0/Coordinates'])
-            halo_masses = np.array(f['/PartType1/Masses']) * 1e10
-            halo_coords = np.array(f['/PartType1/Coordinates'])
+            gas_masses = common.code_mass_to_Msun(common.grab_property(f, 0, 'Masses'))
+            gas_coords = common.grab_property(f, 0, 'Coordinates')
+            halo_masses = common.code_mass_to_Msun(common.grab_property(f, 1, 'Masses'))
+            halo_coords = common.grab_property(f, 1, 'Coordinates')
+            star_masses = common.code_mass_to_Msun(
+                            np.concatenate((common.grab_property(f, 2, 'Masses'),
+                                            common.grab_property(f, 3, 'Masses'),
+                                            common.grab_property(f, 4, 'Masses')), axis=0))
+            star_coords = np.concatenate((common.grab_property(f, 2, 'Coordinates'),
+                                          common.grab_property(f, 3, 'Coordinates'),
+                                          common.grab_property(f, 4, 'Coordinates')), axis=0)
+            if not include_times:
+                # we don't want to include times, so we force time = None
+                time = None
+            elif time is None: 
+                # want to include times, but we don't know the time, so load it from file
+                time = common.code_time_to_Myr(f['Header'].attrs['Time'])
             
-        # all stars, both initial and formed
-        star_masses = np.concatenate((disk_masses, formed_stellar_masses), axis=0)
-        star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
-
         # find peak brightness
         if args.no_weight:
-            centre = locate_peak_density_3D(
+            centre = common.locate_peak_density_3D(
                 star_coords, cube_radius=75, nbins=512).reshape((1, 3))
         else:
-            centre = locate_peak_density_3D(
+            centre = common.locate_peak_density_3D(
                 star_coords, cube_radius=75, nbins=512, weights=star_masses).reshape((1, 3))
         return tuple(process_snapshot_helper(m, c - centre, time) for m, c in (
                 (star_masses, star_coords),
-                (formed_stellar_masses, formed_stellar_coords),
                 (gas_masses, gas_coords),
                 (halo_masses, halo_coords),
             ))
@@ -220,27 +243,30 @@ else: # --mmg was specified
         sys.stdout.flush()
 
         with h5py.File(data_file, 'r') as f:
-            disk_ids = np.array(f['/PartType2/ParticleIDs'])
-            disk_masses = np.array(f['/PartType2/Masses']) * 1e10
-            disk_coords = np.array(f['/PartType2/Coordinates'])
-            try: # it may be that no stars have formed yet, in which case we get an error
-                formed_stellar_masses = np.array(f['/PartType4/Masses']) * 1e10
-                formed_stellar_coords = np.array(f['/PartType4/Coordinates'])
-            except:
-                formed_stellar_masses = np.empty((0, 1), dtype=disk_masses.dtype)
-                formed_stellar_coords = np.empty((0, 3), dtype=disk_coords.dtype)
-            gas_masses = np.array(f['/PartType0/Masses']) * 1e10
-            gas_coords = np.array(f['/PartType0/Coordinates'])
-            halo_masses = np.array(f['/PartType1/Masses']) * 1e10
-            halo_coords = np.array(f['/PartType1/Coordinates'])
-            
-            # all stars, both initial and formed
-            star_masses = np.concatenate((disk_masses, formed_stellar_masses), axis=0)
-            star_coords = np.concatenate((disk_coords, formed_stellar_coords), axis=0)
+            gas_masses = common.code_mass_to_Msun(common.grab_property(f, 0, 'Masses'))
+            gas_coords = common.grab_property(f, 0, 'Coordinates')
+            halo_masses = common.code_mass_to_Msun(common.grab_property(f, 1, 'Masses'))
+            halo_coords = common.grab_property(f, 1, 'Coordinates')
+            star_masses = common.code_mass_to_Msun(
+                            np.concatenate((common.grab_property(f, 2, 'Masses'),
+                                            common.grab_property(f, 3, 'Masses'),
+                                            common.grab_property(f, 4, 'Masses')), axis=0))
+            star_coords = np.concatenate((common.grab_property(f, 2, 'Coordinates'),
+                                          common.grab_property(f, 3, 'Coordinates'),
+                                          common.grab_property(f, 4, 'Coordinates')), axis=0)
+            star_ids = np.concatenate((common.grab_property(f, 2, 'ParticleIDs'),
+                                       common.grab_property(f, 3, 'ParticleIDs'),
+                                       common.grab_property(f, 4, 'ParticleIDs')), axis=0)
+            if not include_times:
+                # we don't want to include times, so we force time = None
+                time = None
+            elif time is None: 
+                # want to include times, but we don't know the time, so load it from file
+                time = common.code_time_to_Myr(f['Header'].attrs['Time'])
 
-        return tuple(process_snapshot_helper(m, recenter(m, c, disk_ids), time) for m, c in (
+        # won't be working as written
+        return tuple(process_snapshot_helper(m, recenter(m, c, star_ids), time) for m, c in (
                 (star_masses, star_coords),
-                (formed_stellar_masses, formed_stellar_coords),
                 (gas_masses, gas_coords),
                 (halo_masses, halo_coords),
             ))
@@ -264,15 +290,15 @@ def process_snapshot_helper(masses, coords, time):
 ncpus = int(os.environ.get('SLURM_CPUS_PER_TASK', default=1))
 print('Beginning computations with {} CPUs...'.format(ncpus))
 with multiprocessing.Pool(processes=ncpus) as pool:
-    if t is not None:
-        stars_results_tuple, formed_results_tuple, gas_results_tuple, halo_results_tuple = zip(
+    if include_times and (t is not None):
+        stars_results_tuple, gas_results_tuple, halo_results_tuple = zip(
             *pool.starmap(process_snapshot, zip(snaps, t), chunksize=1))
     else:
-        stars_results_tuple, formed_results_tuple, gas_results_tuple, halo_results_tuple = zip(
+        stars_results_tuple, gas_results_tuple, halo_results_tuple = zip(
             *pool.map(process_snapshot, snaps, chunksize=1))
 
 # make headers for save files
-if t is not None:
+if include_times:
     header = delimiter.join((s.ljust(fieldwidth) for s in (
             'Time',
             'Total',
@@ -296,7 +322,6 @@ else:
 
 # convert tuples to strings
 stars_results_string = header + '\n' + '\n'.join(stars_results_tuple) + '\n'
-formed_results_string = header + '\n' + '\n'.join(formed_results_tuple) + '\n'
 gas_results_string = header + '\n' + '\n'.join(gas_results_tuple) + '\n'
 halo_results_string = header + '\n' + '\n'.join(halo_results_tuple) + '\n'
 
@@ -305,8 +330,6 @@ if args.print:
     print('Printing results...\n\n')
     print('===== STELLAR MASS =====')
     print(stars_results_string)
-    print('===== STELLAR MASS FORMED =====')
-    print(formed_results_string)
     print('===== GAS MASS =====')
     print(gas_results_string)
     print('===== HALO MASS =====')
@@ -315,8 +338,6 @@ else:
     print('Writing files...')
     with open(args.prefix + '_mass_table_stars.txt' if args.prefix is not None else 'mass_table_stars.txt', 'w') as f:
         f.write(stars_results_string)
-    with open(args.prefix + '_mass_table_stars_formed.txt' if args.prefix is not None else 'mass_table_stars_formed.txt', 'w') as f:
-        f.write(formed_results_string)
     with open(args.prefix + '_mass_table_gas.txt' if args.prefix is not None else 'mass_table_gas.txt', 'w') as f:
         f.write(gas_results_string)
     with open(args.prefix + '_mass_table_halo.txt' if args.prefix is not None else 'mass_table_halo.txt', 'w') as f:
