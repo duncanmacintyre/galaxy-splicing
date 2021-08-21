@@ -56,7 +56,7 @@ module load hdf5 scipy-stack
 python /path/to/get_masses_from_snapshots.py -f snapshot_{000...400} -R $(cat /path/to/radius_bins.txt) 
 ```
 
-This will operate on files snapshot_000.hdf5, snapshot_001.hdf5, ..., snapshot_400.hdf5 in the directory in which it is submitted. Observe the radius_bins.txt file; I often `cat` it to get consistent radii to use with the `-R` argument. (The Gizmo parameter file defines the time between snapshots in code units.)
+This will operate on files snapshot_000.hdf5, snapshot_001.hdf5, ..., snapshot_400.hdf5 in the directory in which it is submitted. Observe the radius_bins.txt file; I often `cat` it to get consistent radii to use with the `-R` argument.
 
 ### stellar_mass_radial_envelope/plot_mass_envelopes.py
 
