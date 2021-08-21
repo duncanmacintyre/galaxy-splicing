@@ -83,6 +83,9 @@ if load is not None:
         print('Do not use both --seed and --load.\n')
         parser.print_help()
         exit(1)
+    elif os.path.basename(os.path.realpath(fname_out)).startswith(os.path.basename(os.path.realpath(load))):
+        print('Output file cannot be located in the directory we load from. This will cause errors if we try to load again in the future.')
+        exit(1)
 elif len(fnames_in) == 0:
     print('No input files specified! Stopping without creating any files.')
     exit(0)
@@ -93,6 +96,10 @@ elif len(fnames_in) == 0:
 #   - a copy of .hdf5 data, path given by get_copied_data_file_path()
 if log_dir is None:
     log_dir = fname_out + '.log'
+elif os.path.basename(os.path.realpath(fname_out)).startswith(os.path.basename(os.path.realpath(log_dir))):
+    print('Output file cannot be located in the log directory. This will cause errors if we try to load in the future.')
+    exit(1)
+
 # make the log directory if it doesn't already exist
 try:
     os.mkdir(log_dir)
