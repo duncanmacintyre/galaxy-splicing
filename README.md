@@ -20,8 +20,22 @@ The *splice* directory contains code to easily start Gizmo simulations of galaxi
 
 The *analysis* directory contains some scripts for analyzing simulation results. They are also useful for inspecting initial conditions files as they are being made. For instance, the plot_snapshot_stellar_mass_histograms.py is useful for visualizing the galaxies as they are simulated in isolation.
 
+## Particle types
+
+There are six possible particle types in Gizmo.
+
+| number | alternative name | description |
+|:-----|:-----|:-----|
+| PartType0 | "gas" | gas particles |
+| PartType1 | "halo" | dark matter particles |
+| PartType2 | "disk" | star particles that were created by Makegalaxy |
+| PartType3 | "bulge" | unused |
+| PartType4 | "stars" | star particles that formed out of gas particles, either while galaxies were simulated in isolation or during the main simulation |
+| PartType5 | "bndry" | black hole particles |
 
 ---
+
+#### Footnotes
 
 <a name="footnote1">1</a>: "Resolution" just means the initial mass of each particle. If we set each gas particle to have an initial mass of 1e6 M☉, we will have ten times more particles and a better resolution than if we had set each gas particle to have an initial mass of 1e7 M☉. We make dark matter particles five times more massive than other types because of the large amount of dark matter and because we are more interested in other particle types. Thus, I might say "1e6 resolution" to mean that gas particles have initial masses of 1e6 M☉, start particles have initial masses of 1e6 M☉, and dark matter particles have initial masses of 5e6 M☉.
 
